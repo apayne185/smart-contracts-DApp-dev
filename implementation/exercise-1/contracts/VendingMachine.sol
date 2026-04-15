@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 /// @title VendingMachine
 /// @notice A simple on-chain vending machine that sells digital products.
-/// @dev On chain we keep only what is required for trust:
-///      product catalog (id, name, price, stock) and per-buyer ownership counts.
-///      Heavy descriptions, images, etc. belong off chain.
+/// @dev On chain we keep only what is required- 
+///      product catalog (id, name, price, stock) and per-buyer ownership counts
+///      Heavy descriptions, images, .. belong off chain
 contract VendingMachine {
-    // ---- Types ----------------------------------------------------------
+    // types
     struct Product {
         uint256 id;
         string  name;
@@ -16,7 +16,7 @@ contract VendingMachine {
         bool    exists;
     }
 
-    // ---- Storage --------------------------------------------------------
+    // storage
     address public owner;
     uint256 public nextProductId = 1;
     uint256[] private productIds;
@@ -24,7 +24,7 @@ contract VendingMachine {
     // buyer => productId => quantity owned (purchased through this machine)
     mapping(address => mapping(uint256 => uint256)) private ownedQty;
 
-    // ---- Errors ---------------------------------------------------------
+    // error
     error NotOwner();
     error ProductNotFound(uint256 id);
     error ProductAlreadyExists(uint256 id);
@@ -36,7 +36,7 @@ contract VendingMachine {
     error RefundFailed();
     error WithdrawFailed();
 
-    // ---- Events ---------------------------------------------------------
+    //evemts
     event ProductAdded(uint256 indexed id, string name, uint256 priceWei, uint256 stock);
     event ProductRestocked(uint256 indexed id, uint256 addedQty, uint256 newStock);
     event PriceUpdated(uint256 indexed id, uint256 oldPrice, uint256 newPrice);
@@ -48,7 +48,7 @@ contract VendingMachine {
     );
     event Withdrawal(address indexed to, uint256 amount);
 
-    // ---- Modifiers ------------------------------------------------------
+    // modifiers
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
@@ -58,9 +58,9 @@ contract VendingMachine {
         owner = msg.sender;
     }
 
-    // ---- Admin functions ------------------------------------------------
+    // functions admin
 
-    /// @notice Add a brand new product to the machine. Admin only.
+    /// @notice Add brand new product to the machine - admin only
     function addProduct(string calldata name, uint256 priceWei, uint256 initialStock)
         external
         onlyOwner
@@ -81,7 +81,7 @@ contract VendingMachine {
         emit ProductAdded(id, name, priceWei, initialStock);
     }
 
-    /// @notice Add stock to an existing product. Admin only.
+    /// @notice Add stock to existing product -admin only.
     function restock(uint256 id, uint256 addedQty) external onlyOwner {
         if (addedQty == 0) revert InvalidQuantity();
         Product storage p = products[id];
@@ -90,7 +90,7 @@ contract VendingMachine {
         emit ProductRestocked(id, addedQty, p.stock);
     }
 
-    /// @notice Update the price of an existing product. Admin only.
+    /// @notice Update the price of an existing product - admin only
     function updatePrice(uint256 id, uint256 newPriceWei) external onlyOwner {
         if (newPriceWei == 0) revert InvalidPrice();
         Product storage p = products[id];
@@ -100,7 +100,7 @@ contract VendingMachine {
         emit PriceUpdated(id, old, newPriceWei);
     }
 
-    /// @notice Withdraw collected ETH to the owner. Admin only.
+    /// @notice Withdraw collected ETH to the owner   - admin only
     function withdraw() external onlyOwner {
         uint256 bal = address(this).balance;
         (bool ok, ) = payable(owner).call{value: bal}("");
@@ -108,9 +108,9 @@ contract VendingMachine {
         emit Withdrawal(owner, bal);
     }
 
-    // ---- User functions -------------------------------------------------
+    // functions user
 
-    /// @notice Buy `qty` units of product `id`. Refunds any overpayment.
+    /// @notice Buy `qty` units of product `id, refunds overpayment
     function purchase(uint256 id, uint256 qty) external payable {
         if (qty == 0) revert InvalidQuantity();
         Product storage p = products[id];
@@ -124,7 +124,7 @@ contract VendingMachine {
         p.stock -= qty;
         ownedQty[msg.sender][id] += qty;
 
-        // Refund overpayment
+        // refund overpayment
         uint256 refund = msg.value - cost;
         if (refund > 0) {
             (bool ok, ) = payable(msg.sender).call{value: refund}("");
@@ -134,19 +134,21 @@ contract VendingMachine {
         emit ProductPurchased(msg.sender, id, qty, cost);
     }
 
-    // ---- Views ----------------------------------------------------------
 
-    /// @notice Return how many distinct products exist.
+
+// views 
+
+    /// @notice Return number distinct products existng
     function productCount() external view returns (uint256) {
         return productIds.length;
     }
 
-    /// @notice Return all product ids (small catalog assumed).
+    /// @notice Return all product ids (small catalog)
     function allProductIds() external view returns (uint256[] memory) {
         return productIds;
     }
 
-    /// @notice Get a product by id.
+    /// @notice Get product by id
     function getProduct(uint256 id)
         external
         view
@@ -157,7 +159,7 @@ contract VendingMachine {
         return (p.id, p.name, p.priceWei, p.stock);
     }
 
-    /// @notice How many units of product `id` are owned by `user`.
+    /// @notice units of product `id` owned by `user`.
     function balanceOf(address user, uint256 id) external view returns (uint256) {
         return ownedQty[user][id];
     }

@@ -5,18 +5,21 @@ const { ethers } = await network.connect();
 
 describe("VendingMachine", function () {
   let vm, owner, alice, bob;
-  const COLA  = { name: "Cola",       price: ethers.parseEther("0.01"),  stock: 5 };
-  const CHIPS = { name: "Chips",      price: ethers.parseEther("0.005"), stock: 3 };
-  const CHOCO = { name: "Chocolate",  price: ethers.parseEther("0.008"), stock: 2 };
+  const COLA  = { name: "Cola",  price: ethers.parseEther("0.01"),stock: 5 };
+  const CHIPS = { name: "Chips",price: ethers.parseEther("0.005"), stock: 3 };
+  const CHOCO = { name: "Chocolate", price: ethers.parseEther("0.008"), stock: 2 };
 
   beforeEach(async () => {
     [owner, alice, bob] = await ethers.getSigners();
     vm = await ethers.deployContract("VendingMachine");
     await vm.waitForDeployment();
-    await (await vm.addProduct(COLA.name,  COLA.price,  COLA.stock)).wait();   // id 1
-    await (await vm.addProduct(CHIPS.name, CHIPS.price, CHIPS.stock)).wait();  // id 2
-    await (await vm.addProduct(CHOCO.name, CHOCO.price, CHOCO.stock)).wait();  // id 3
+    await (await vm.addProduct(COLA.name, COLA.price,  COLA.stock)).wait();      // id 1
+    await (await vm.addProduct(CHIPS.name, CHIPS.price, CHIPS.stock)).wait();      // id 2
+    await (await vm.addProduct(CHOCO.name, CHOCO.price, CHOCO.stock)).wait();      // id 3
   });
+
+
+  
 
   // 1) successful purchase
   it("allows a user to buy a product and emits ProductPurchased", async () => {
@@ -46,7 +49,7 @@ describe("VendingMachine", function () {
     ).to.be.revertedWithCustomError(vm, "InsufficientStock");
   });
 
-  // 4) permission failure: non-admin tries to restock
+  // 4) permission failure - nonadmin tried to restock
   it("reverts when a non-owner tries to restock", async () => {
     await expect(
       vm.connect(alice).restock(1, 5)
@@ -62,7 +65,7 @@ describe("VendingMachine", function () {
     ).to.be.revertedWithCustomError(vm, "NotOwner");
   });
 
-  // 5) state changes after a successful transaction
+  // 5) state changes after sucessful transaction
   it("updates stock, ownership, and contract balance after purchase", async () => {
     const qty = 2n;
     const cost = CHIPS.price * qty;
@@ -79,7 +82,11 @@ describe("VendingMachine", function () {
     expect(after - before).to.equal(cost);
   });
 
-  // Extra: refund overpayment
+
+
+
+
+  // refund overpayment
   it("refunds overpayment to the buyer", async () => {
     const qty = 1n;
     const overpay = COLA.price + ethers.parseEther("0.05");
@@ -93,7 +100,8 @@ describe("VendingMachine", function () {
     expect(balBefore - balAfter).to.equal(COLA.price + gas);
   });
 
-  // Extra: restock + event
+
+  //restock, event
   it("admin restock increases stock and emits event", async () => {
     await expect(vm.restock(1, 7))
       .to.emit(vm, "ProductRestocked")
@@ -102,7 +110,9 @@ describe("VendingMachine", function () {
     expect(p.stock).to.equal(BigInt(COLA.stock + 7));
   });
 
-  // Extra: withdraw
+
+
+  // withdraw
   it("only owner can withdraw collected funds", async () => {
     await vm.connect(alice).purchase(1, 1, { value: COLA.price });
     await expect(vm.connect(alice).withdraw())

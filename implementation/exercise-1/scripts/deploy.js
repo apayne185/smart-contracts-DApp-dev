@@ -11,10 +11,10 @@ await contract.waitForDeployment();
 const address = await contract.getAddress();
 console.log("Contract deployed to:", address);
 
-// Seed a catalog so the dApp has products to show.
+// seed catalog so dApp has products to show
 const seed = [
-  { name: "Cola",      price: ethers.parseEther("0.01"),  stock: 10 },
-  { name: "Chips",     price: ethers.parseEther("0.005"), stock: 20 },
+  { name: "Cola",price: ethers.parseEther("0.01"), stock: 10 },
+  { name: "Chips", price: ethers.parseEther("0.005"), stock: 20 },
   { name: "Chocolate", price: ethers.parseEther("0.008"), stock: 15 },
 ];
 for (const p of seed) {
@@ -23,10 +23,14 @@ for (const p of seed) {
   console.log(`  added ${p.name}`);
 }
 
-// Save deployed contract address
-fs.writeFileSync("deployed-address.txt", address);
 
-// Save ABI for Python
+
+// save deployed contract address
+fs.writeFileSync("deployed-address.txt", address);   
+
+
+
+// save ABI for python
 const artifactPath =
   "./artifacts/contracts/VendingMachine.sol/VendingMachine.json";
 const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
