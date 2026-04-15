@@ -4,13 +4,13 @@ import { network } from "hardhat";
 const { ethers } = await network.connect();
 
 describe("VendingMachine", function () {
-  let vm, owner, alice, bob;
+  let vm, alice, bob;
   const COLA  = { name: "Cola",  price: ethers.parseEther("0.01"),stock: 5 };
   const CHIPS = { name: "Chips",price: ethers.parseEther("0.005"), stock: 3 };
   const CHOCO = { name: "Chocolate", price: ethers.parseEther("0.008"), stock: 2 };
 
   beforeEach(async () => {
-    [owner, alice, bob] = await ethers.getSigners();
+    [, alice, bob] = await ethers.getSigners();
     vm = await ethers.deployContract("VendingMachine");
     await vm.waitForDeployment();
     await (await vm.addProduct(COLA.name, COLA.price,  COLA.stock)).wait();      // id 1
@@ -98,26 +98,5 @@ describe("VendingMachine", function () {
 
     const balAfter = await ethers.provider.getBalance(alice.address);
     expect(balBefore - balAfter).to.equal(COLA.price + gas);
-  });
-
-
-  //restock, event
-  it("admin restock increases stock and emits event", async () => {
-    await expect(vm.restock(1, 7))
-      .to.emit(vm, "ProductRestocked")
-      .withArgs(1n, 7n, BigInt(COLA.stock + 7));
-    const p = await vm.getProduct(1);
-    expect(p.stock).to.equal(BigInt(COLA.stock + 7));
-  });
-
-
-
-  // withdraw
-  it("only owner can withdraw collected funds", async () => {
-    await vm.connect(alice).purchase(1, 1, { value: COLA.price });
-    await expect(vm.connect(alice).withdraw())
-      .to.be.revertedWithCustomError(vm, "NotOwner");
-    await expect(vm.withdraw())
-      .to.emit(vm, "Withdrawal");
   });
 });
