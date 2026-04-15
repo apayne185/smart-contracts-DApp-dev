@@ -1,10 +1,10 @@
 # Exercise 2 — Ticket Office (web2 + web3)
 
-An event-ticketing app implemented twice with the same Tkinter frontend:
+An event ticketing app implemented twice w same Tkinter frontend:
 
-- **Part A (web2)** — Flask + SQLite backend behind a REST API.
-- **Part B (web3)** — `TicketOffice` Solidity contract on Ganache, called via
-  `web3.py` with locally-signed transactions.
+- **Part A (web2)** -Flask +SQLite backend w REST API
+- **Part B (web3)** -`TicketOffice` Solidity contract on Ganache, called 
+  `web3.py` with local signed transactions
 
 The point is to see what changes when trust moves from a centralized backend
 to a smart contract. The UI code does not change.
@@ -30,7 +30,9 @@ exercise-2/
       schema.sql
     requirements.txt
     keys.example.json               # copy to keys.json for web3 mode
+
 ```
+
 
 ## Running
 
@@ -46,8 +48,8 @@ pip install -r app/requirements.txt
 ### Part A — web2 (Flask + SQLite)
 
 ```bash
-python -m app.server.app            # starts server on :5000, seeds 4 users + 2 events
-# in another terminal:
+python -m app.server.app           
+# 2nd terminal 
 python app/client.py --mode web2
 ```
 
@@ -57,23 +59,16 @@ only `admin` sees enabled admin buttons.
 ### Part B — web3 (Ganache + TicketOffice)
 
 ```bash
-# 1) Ganache running at :8545 (from repo root)
 (cd ../../ganache && docker compose up -d)
 
-# 2) compile + deploy
 npx hardhat build
 npx hardhat run scripts/deploy.js --network ganache
-#   -> deployed-address.txt, TicketOffice.abi.json
 
-# 3) put 3+ Ganache private keys in app/keys.json (first = admin/deployer)
-#    see app/keys.example.json
-
-# 4) launch the same UI against the contract
 python app/client.py --mode web3
 ```
 
-`docker logs ganache-ex1` shows the deterministic accounts — account (0) is
-the deployer and therefore the admin.
+`docker logs ganache-ex1` shows deterministic accounts -account (0) is
+the deployer and admin
 
 ## Tests (web3)
 
@@ -81,7 +76,7 @@ the deployer and therefore the admin.
 npx hardhat test
 ```
 
-10 tests, covering all 8 required cases plus 1 extra:
+10 tests, covering all 8 cases plus 1 
 
 | # | Case                                                           | Type     |
 |---|----------------------------------------------------------------|----------|
@@ -110,20 +105,23 @@ string.
   `TicketTransferred`, `TicketListed`, `ListingCancelled`, `TicketResold`,
   `PriceUpdated`, `EventActiveChanged`)
 
-These are the facts that the user needs to be able to verify or enforce
-without trusting the dApp operator: the face price charged, whether a ticket
-exists, who owns it, and whether a resale listing is real.
+These are the facts a user needs to to verify/enforce
+w/out trusting the  dApp operator
+
+
 
 **Off chain:**
-- Event descriptions, banners, venue addresses — expensive to store and not
-  trust-critical. A production system would put these on IPFS and emit only
+- Event descriptions, banners, venue addresses - expensive to store, not
+  trust critical. A production system would put these on IPFS and emit only
   a URI on chain.
-- Wallet selection, transaction history display, formatting — the client.
-- Sorting / filtering / search — done on the client.
+- Wallet selection, transaction history display, formatting- client.
+- Sorting/filtering/search - done by client
+
 
 Rule of thumb: if removing the data from chain lets a user be cheated, it
-stays; otherwise it goes off chain. Ticket prices must be on chain (what the
-contract charges is what the user agreed to). A flyer image does not.
+stays otherwise goes off chain. 
+Ticket prices must be on chain (what
+contract charges is what the user agreed to), flyer image doesnt
 
 ## What actually changes between web2 and web3
 
@@ -137,11 +135,11 @@ contract charges is what the user agreed to). A flyer image does not.
 | Server trust required | yes: server can mint / move tickets freely  | no: admin is constrained by contract rules|
 | Availability          | single server is a single point of failure  | anyone can read state from any node      |
 
-The **frontend does not change** at all — it calls the same `Backend`
+The **frontend does not change** at all, it calls the same `Backend`
 methods. Switching from `--mode web2` to `--mode web3` is the entire
-"decentralization" diff from the user's point of view, which makes the trust
-delta visible: in one mode the server rewrites a row; in the other the user
-signs a transaction that the contract validates on chain.
+decentralization diff from the user pov, which makes the trust
+delta visible. in one mode the server rewrites a row in the other the user
+signs a transaction that the contract validates on chain
 
 ## Security considerations (web3)
 
@@ -156,18 +154,21 @@ signs a transaction that the contract validates on chain.
 - **Overpayment** is refunded exactly, so odd amounts don't accrue to the
   contract.
 - **No unbounded loops** on trust-critical paths. `ticketsOf` is a view over
-  a demo-scale catalog; a production build would index owners via events.
+  a democale catalog, a production build would idnex owners by events
 
-## How we tested
 
-- **web3**: full Hardhat/Mocha suite in `tests/` — all required cases + a few
-  edge cases (stale-listing-after-transfer, admin pause/resume).
+
+
+## How i tested
+
+- **web3**: full Hardhat/Mocha suite in `tests/` — all required cases and few
+  edge cases (stale listing after transfer, admin pause/resume).
 - **web2**: manual tests from the Tkinter UI across 4 users:
   - create events as `admin`; verify non-admins see buttons disabled.
-  - buy tickets until sold out; verify 400 on next attempt.
+  - buy tickets until sold out verify 400 on next attempt
   - transfer between users, verify recipient's "My Tickets" updates.
-  - list/cancel/re-list; verify "already listed" rejects the duplicate.
-  - buy resale; verify seller/buyer ownership flip.
+  - list/cancel/relist; verify "already listed" rejects the duplicate.
+  - buy resale verify seller/buyer ownership flip.
 - Cross-check: the UI reports the same final state in both modes after the
-  same sequence of actions, which is the end-to-end test that the backend
+  same sequence of actions,  end-to-end test that the backend
   abstraction is sound.
