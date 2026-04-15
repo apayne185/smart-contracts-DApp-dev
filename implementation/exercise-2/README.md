@@ -1,4 +1,4 @@
-# Exercise 2 — Ticket Office (web2 + web3)
+# Exercise 2 - Ticket Office (web2 + web3)
 
 An event ticketing app implemented twice w same Tkinter frontend:
 
@@ -144,16 +144,16 @@ signs a transaction that the contract validates on chain
 ## Security considerations (web3)
 
 - **Access control** via `onlyOwner` on `createEvent`, `setEventActive`,
-  `updatePrice`, `withdraw` — typed `NotOwner()` error.
+  `updatePrice`, `withdraw` - typed `NotOwner()` error.
 - **Validation**: reject empty names, zero prices, zero supply, zero address,
-  unknown ids, self-transfers, double-listings.
+  unknown ids, self-transfers, double listings.
 - **Checks-Effects-Interactions**: in `buyTicket`, `buyResale`, and the
   refund/payout paths, state is updated before any external `call`.
 - **Stale listings** are cleared inside `transferTicket`, so a gift followed
   by an attempted `buyResale` reverts with `NotListed` (covered by a test).
-- **Overpayment** is refunded exactly, so odd amounts don't accrue to the
+- **Overpayment** is refunded exactly, so odd amounts dont acrue to the
   contract.
-- **No unbounded loops** on trust-critical paths. `ticketsOf` is a view over
+- **No unbounded loops** on trust critical paths. `ticketsOf` is a view over
   a democale catalog, a production build would idnex owners by events
 
 
@@ -161,14 +161,14 @@ signs a transaction that the contract validates on chain
 
 ## How i tested
 
-- **web3**: full Hardhat/Mocha suite in `tests/` — all required cases and few
+- **web3**: full Hardhat/Mocha suite in `tests/` - all required cases and few
   edge cases (stale listing after transfer, admin pause/resume).
 - **web2**: manual tests from the Tkinter UI across 4 users:
-  - create events as `admin`; verify non-admins see buttons disabled.
+  - create events as `admin`; verify nonadmins see buttons disabled.
   - buy tickets until sold out verify 400 on next attempt
-  - transfer between users, verify recipient's "My Tickets" updates.
-  - list/cancel/relist; verify "already listed" rejects the duplicate.
+  - transfer between users - see if recipient's "My Tickets" updates
+  - list/cancel/relist - verify if "already listed" rejects duplicates
   - buy resale verify seller/buyer ownership flip.
-- Cross-check: the UI reports the same final state in both modes after the
-  same sequence of actions,  end-to-end test that the backend
-  abstraction is sound.
+- Cross check: the UI reports the same final state in both modes after the
+  same sequence of actions,  end to end test to see if  backend
+  abstraction is done
