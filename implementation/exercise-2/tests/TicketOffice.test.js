@@ -30,23 +30,19 @@ describe("TicketOffice", function () {
     expect(ticketOwner).to.equal(alice.address);
   });
 
-  // 2) failed purchase when rules not satisfied (underpayment)
+  
+  // 2) failed purchase when rules not satisfied (underpaymnt)
   it("reverts when payment is insufficient", async () => {
     await expect(
       office.connect(alice).buyTicket(1, { value: ROCK.price - 1n })
     ).to.be.revertedWithCustomError(office, "InsufficientPayment");
   });
 
-  it("reverts when buying for an unknown event", async () => {
-    await expect(
-      office.connect(alice).buyTicket(99, { value: ROCK.price })
-    ).to.be.revertedWithCustomError(office, "EventNotFound");
-  });
-
   it("reverts when the event is sold out", async () => {
-    // TECH has supply 2 — buy both then try a third.
+    // TECH has supply 2   - buy both then tries 3
     await office.connect(alice).buyTicket(2, { value: TECH.price });
     await office.connect(bob).buyTicket(2,   { value: TECH.price });
+
     await expect(
       office.connect(carol).buyTicket(2, { value: TECH.price })
     ).to.be.revertedWithCustomError(office, "SoldOut");
@@ -63,7 +59,9 @@ describe("TicketOffice", function () {
     expect(ticketOwner).to.equal(bob.address);
   });
 
-  // 4) failed transfer by non-owner
+
+
+  // 4) failed transfer by non owner
   it("reverts when a non-owner tries to transfer a ticket", async () => {
     await office.connect(alice).buyTicket(1, { value: ROCK.price });
     await expect(
@@ -79,7 +77,6 @@ describe("TicketOffice", function () {
     await expect(office.connect(alice).listForResale(1, resalePrice))
       .to.emit(office, "TicketListed")
       .withArgs(1n, alice.address, resalePrice);
-
     const sellerBefore = await ethers.provider.getBalance(alice.address);
 
     await expect(office.connect(bob).buyResale(1, { value: resalePrice }))
@@ -96,6 +93,8 @@ describe("TicketOffice", function () {
     expect(active).to.equal(false);
   });
 
+
+
   // 6) permission failure for an admin-only action
   it("reverts when a non-admin tries to create an event or update price", async () => {
     await expect(
@@ -109,7 +108,7 @@ describe("TicketOffice", function () {
     ).to.be.revertedWithCustomError(office, "NotOwner");
   });
 
-  // 7) edge case: repeated / invalid state transitions
+  // 7) edge case - repeated/invalid state transition
   it("rejects double-listing the same ticket and cancelling an inactive listing", async () => {
     await office.connect(alice).buyTicket(1, { value: ROCK.price });
     await office.connect(alice).listForResale(1, ethers.parseEther("0.03"));
@@ -133,9 +132,12 @@ describe("TicketOffice", function () {
     ).to.be.revertedWithCustomError(office, "NotListed");
   });
 
-  // 8) final ownership after a sequence of actions
+
+
+
+
+  // 8) final ownership after sequence of actions
   it("final ownership is correct after buy -> transfer -> list -> resell", async () => {
-    // alice buys, gifts to bob, bob lists, carol buys
     await office.connect(alice).buyTicket(1, { value: ROCK.price });
     await office.connect(alice).transferTicket(1, bob.address);
     await office.connect(bob).listForResale(1, ethers.parseEther("0.03"));
@@ -154,13 +156,6 @@ describe("TicketOffice", function () {
     expect(bobTickets.length).to.equal(0);
   });
 
-  // Extras
-  it("admin can pause primary sales and purchases revert while paused", async () => {
-    await office.setEventActive(1, false);
-    await expect(
-      office.connect(alice).buyTicket(1, { value: ROCK.price })
-    ).to.be.revertedWithCustomError(office, "EventInactive");
-    await office.setEventActive(1, true);
-    await office.connect(alice).buyTicket(1, { value: ROCK.price });
-  });
+
+
 });

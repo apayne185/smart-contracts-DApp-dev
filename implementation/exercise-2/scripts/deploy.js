@@ -10,7 +10,6 @@ await contract.waitForDeployment();
 const address = await contract.getAddress();
 console.log("Contract deployed to:", address);
 
-// Seed 2 events so the dApp has something to show.
 const nowSec = Math.floor(Date.now() / 1000);
 const seed = [
   { name: "Rock Concert", price: ethers.parseEther("0.02"), supply: 5,  date: nowSec + 14 * 86400 },

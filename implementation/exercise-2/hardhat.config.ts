@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
   solidity: {
     profiles: {
-      default:    { version: "0.8.24" },
+      default:{ version: "0.8.24" },
       production: {
         version: "0.8.24",
         settings: { optimizer: { enabled: true, runs: 200 } },
@@ -14,7 +14,7 @@ export default defineConfig({
   },
   paths: {
     sources: "./contracts",
-    tests:   "./tests",
+    tests:"./tests",
   },
   networks: {
     ganache: {
@@ -23,7 +23,7 @@ export default defineConfig({
       chainId: 1337,
     },
     hardhatMainnet: { type: "edr-simulated", chainType: "l1" },
-    hardhatOp:      { type: "edr-simulated", chainType: "op" },
+    hardhatOp: { type: "edr-simulated", chainType: "op" },
     sepolia: {
       type: "http",
       chainType: "l1",

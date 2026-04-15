@@ -81,22 +81,20 @@ the deployer and therefore the admin.
 npx hardhat test
 ```
 
-10 tests, covering all required cases:
+10 tests, covering all 8 required cases plus 1 extra:
 
-| # | Case                                                           |
-|---|----------------------------------------------------------------|
-| 1 | Successful ticket purchase (emits `TicketPurchased`, state ok) |
-| 2 | Reverts on insufficient payment                                |
-| 3 | Reverts when event not found                                   |
-| 4 | Reverts when event is sold out                                 |
-| 5 | Successful transfer by owner                                   |
-| 6 | Reverts when non-owner tries to transfer                       |
-| 7 | Full resale flow: list → buy → funds flow to seller            |
-| 8 | Permission failures for admin-only actions                     |
-| 9 | Edge cases: double-listing and cancelling an inactive listing  |
-| 10| Transfer clears any stale listing                              |
-| 11| Final ownership after `buy → transfer → list → resell`         |
-| 12| Admin pause/resume of primary sales                            |
+| # | Case                                                           | Type     |
+|---|----------------------------------------------------------------|----------|
+| 1 | Successful ticket purchase (emits `TicketPurchased`, state ok) | required |
+| 2 | Reverts on insufficient payment                                | required |
+| 3 | Reverts when event is sold out                                 | required |
+| 4 | Successful transfer by owner                                   | required |
+| 5 | Reverts when non-owner tries to transfer                       | required |
+| 6 | Full resale flow: list → buy → funds flow to seller            | required |
+| 7 | Permission failures for admin-only actions                     | required |
+| 8 | Edge cases: double-listing and cancelling an inactive listing  | required |
+| 9 | Transfer clears any stale listing                              | extra    |
+| 10| Final ownership after `buy → transfer → list → resell`         | required |
 
 Each revert is checked against the specific typed custom error, not a generic
 string.

@@ -1,14 +1,12 @@
 """
-Shared Tkinter frontend for the Ticket Office.
+Shared Tkinter frontend for Ticket Office
+    python app/client.py --mode web2       # talks to Flask at :5000
+    python app/client.py --mode web3        # talks to TicketOffice on Ganache
 
-Usage:
-    python app/client.py --mode web2    # talks to Flask at :5000
-    python app/client.py --mode web3    # talks to TicketOffice on Ganache
+both use same UI frontend, the trust layer underneath is not identical 
+"""   
 
-Both modes present the same UI. Only the Backend instance behind
-`self.be` changes — this is the whole point of the exercise: the
-frontend is identical, the trust layer underneath is not.
-"""
+
 import argparse
 import tkinter as tk
 from datetime import datetime
@@ -16,8 +14,7 @@ from tkinter import ttk, messagebox, simpledialog
 
 
 def wei_to_eth_str(w: int) -> str:
-    # Display as ETH for web3 parity. The web2 backend stores the same
-    # integer "price_wei" units so the UI formula is identical.
+    #display as ETH for web3 parity
     return f"{int(w) / 1e18:.6f}"
 
 
@@ -45,7 +42,6 @@ class TicketApp(tk.Tk):
         self._build_ui()
         self.refresh_all()
 
-    # ---- UI -----------------------------------------------------------
     def _build_ui(self):
         top = ttk.Frame(self, padding=8); top.pack(fill=tk.X)
         ttk.Label(top, text=f"Mode: {self.be.mode}").pack(side=tk.LEFT, padx=4)
@@ -62,7 +58,8 @@ class TicketApp(tk.Tk):
 
         nb = ttk.Notebook(self); nb.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
 
-        # -- Events tab --
+
+        # events tab
         f_ev = ttk.Frame(nb); nb.add(f_ev, text="Events")
         cols = ("id", "name", "price_eth", "supply", "sold", "active", "date")
         self.ev_tree = ttk.Treeview(f_ev, columns=cols, show="headings", height=10)
@@ -81,20 +78,25 @@ class TicketApp(tk.Tk):
         for b in (self.btn_create, self.btn_price, self.btn_pause):
             b.pack(fill=tk.X, pady=2)
 
-        # -- My Tickets tab --
+
+
+
+        # my rickets tab
         f_my = ttk.Frame(nb); nb.add(f_my, text="My Tickets")
         mcols = ("id", "event_id", "event_name")
         self.my_tree = ttk.Treeview(f_my, columns=mcols, show="headings", height=10)
         for c, w in zip(mcols, (60, 80, 300)):
             self.my_tree.heading(c, text=c)
-            self.my_tree.column(c, width=w, anchor=tk.CENTER)
+            self.my_tree.column(c, width=w, anchor=tk.CENTER)  
+
         self.my_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
         my_side = ttk.Frame(f_my, padding=6); my_side.pack(side=tk.RIGHT, fill=tk.Y)
         ttk.Button(my_side, text="Transfer",       command=self.transfer).pack(fill=tk.X, pady=2)
         ttk.Button(my_side, text="List for resale", command=self.list_resale).pack(fill=tk.X, pady=2)
         ttk.Button(my_side, text="Cancel listing", command=self.cancel_listing).pack(fill=tk.X, pady=2)
 
-        # -- Market tab --
+
+        # market tab
         f_mk = ttk.Frame(nb); nb.add(f_mk, text="Resale Market")
         kcols = ("ticket_id", "event_name", "seller", "price_eth")
         self.mk_tree = ttk.Treeview(f_mk, columns=kcols, show="headings", height=10)
@@ -110,7 +112,7 @@ class TicketApp(tk.Tk):
             fill=tk.X, side=tk.BOTTOM
         )
 
-    # ---- helpers ------------------------------------------------------
+    # helpers 
     def _switch_user(self):
         try:
             self.be.set_active_user(self.active.get())
@@ -161,9 +163,13 @@ class TicketApp(tk.Tk):
                 ))
             self.set_status("Refreshed.")
         except Exception as e:
-            messagebox.showerror("Refresh failed", str(e))
+            messagebox.showerror("Refresh failed", str(e))    
 
-    # ---- Event tab actions --------------------------------------------
+
+
+
+
+    # event tab actions 
     def buy_ticket(self):
         eid = self._selected_id(self.ev_tree)
         if eid is None:
@@ -184,7 +190,8 @@ class TicketApp(tk.Tk):
             self.set_status(f"Bought ticket id={tid}")
             self.refresh_all()
         except Exception as e:
-            messagebox.showerror("Buy failed", str(e))
+            messagebox.showerror("Buy failed", str(e))  
+
 
     def create_event(self):
         name = simpledialog.askstring("Create event", "Name:", parent=self)
@@ -203,7 +210,8 @@ class TicketApp(tk.Tk):
             self.be.create_event(name, eth_to_wei(price_eth), supply, ts)
             self.refresh_all()
         except Exception as e:
-            messagebox.showerror("Create failed", str(e))
+            messagebox.showerror("Create failed", str(e))  
+
 
     def update_price(self):
         eid = self._selected_id(self.ev_tree)
@@ -214,7 +222,9 @@ class TicketApp(tk.Tk):
             self.be.update_price(eid, eth_to_wei(new_price))
             self.refresh_all()
         except Exception as e:
-            messagebox.showerror("Update failed", str(e))
+            messagebox.showerror("Update failed", str(e))  
+
+
 
     def toggle_active(self):
         eid = self._selected_id(self.ev_tree)
@@ -224,9 +234,10 @@ class TicketApp(tk.Tk):
             self.be.set_event_active(eid, not event.get("active"))
             self.refresh_all()
         except Exception as e:
-            messagebox.showerror("Toggle failed", str(e))
+            messagebox.showerror("Toggle failed", str(e)) 
 
-    # ---- My Tickets actions -------------------------------------------
+
+    # my tickets
     def transfer(self):
         tid = self._selected_id(self.my_tree)
         if tid is None: return
@@ -256,9 +267,10 @@ class TicketApp(tk.Tk):
             self.be.cancel_listing(tid)
             self.refresh_all()
         except Exception as e:
-            messagebox.showerror("Cancel failed", str(e))
+            messagebox.showerror("Cancel failed", str(e))  
+            
 
-    # ---- Market actions -----------------------------------------------
+    # market actions 
     def buy_resale(self):
         tid = self._selected_id(self.mk_tree)
         if tid is None: return
