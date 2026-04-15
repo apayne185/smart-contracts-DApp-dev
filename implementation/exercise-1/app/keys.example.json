@@ -1,0 +1,10 @@
+[
+  {
+    "address": "0xPASTE_GANACHE_ACCOUNT_0",
+    "privateKey": "0xPASTE_GANACHE_PRIVATE_KEY_0"
+  },
+  {
+    "address": "0xPASTE_GANACHE_ACCOUNT_1",
+    "privateKey": "0xPASTE_GANACHE_PRIVATE_KEY_1"
+  }
+]
