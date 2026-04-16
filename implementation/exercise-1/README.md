@@ -1,12 +1,9 @@
-# Exercise 1 — Vending Machine dApp
+# Exercise 1 - Vending Machine dApp
 
-A small decentralized application that simulates a digital vending machine:
-users connect a wallet, browse products, buy them, and become on-chain owners
-of the purchased units. An admin (the deployer) can add products, restock,
+A small decentralized application simulates a digital vending machine:
+users connect a wallet, see products, buy them, and become on chain owners
+of the purchased units. An admin (deployer) can add products, restock,
 update prices, and withdraw collected ETH.
-
-Stack mirrors the class tutorial (harthat-web3-tutorial):
-Ganache + Hardhat 3 + Python web3 with locally-signed transactions.
 
 ## Stack
 
@@ -114,8 +111,6 @@ product image
   admin functions (`addProduct`, `restock`,`updatePrice`,`withdraw`).
 - **Input validation**: reject empty names, zero prices, zero quantities,
   unknown product ids.
-- **Payment/stock checks**: `InsufficientPayment` and `InsufficientStock`
-  carry  required and actual values so client can show useful messages
 - **Checks Effects Interactions**: in `purchase`, stock is decremented and
   ownership incremented before any outbound `call` (refund), preventing a
   reentrant refund recipient from observing inconsistent state.
