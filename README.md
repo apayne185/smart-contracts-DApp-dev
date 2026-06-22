@@ -1,5 +1,8 @@
 # Blockchain & Cryptography Toolkit
 
+[![CI](https://github.com/apayne185/smart-contracts-DApp-dev/actions/workflows/ci.yml/badge.svg)](https://github.com/apayne185/smart-contracts-DApp-dev/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 End-to-end implementations across two layers of the blockchain stack:
 
 - **C++17 cryptographic engines** (`cpp/`) — SHA-256 from the FIPS spec, parallel proof-of-work, birthday attack cryptanalysis, and a raw Bitcoin P2PKH transaction builder. No crypto libraries.
