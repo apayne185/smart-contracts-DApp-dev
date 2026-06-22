@@ -11,37 +11,28 @@ export default defineConfig({
       production: {
         version: "0.8.24",
         settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
+          optimizer: { enabled: true, runs: 200 },
         },
       },
     },
   },
   paths: {
     sources: "./contracts",
-    tests: "./tests",
+    tests:   "./test",
   },
   networks: {
     ganache: {
-      type: "http",
-      url: "http://127.0.0.1:8545",
+      type:    "http",
+      url:     "http://127.0.0.1:8545",
       chainId: 1337,
     },
-    hardhatMainnet: {
-      type: "edr-simulated",
-      chainType: "l1",
-    },
-    hardhatOp: {
-      type: "edr-simulated",
-      chainType: "op",
-    },
+    hardhatMainnet: { type: "edr-simulated", chainType: "l1" },
+    hardhatOp:      { type: "edr-simulated", chainType: "op" },
     sepolia: {
-      type: "http",
+      type:      "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url:       configVariable("SEPOLIA_RPC_URL"),
+      accounts:  [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
   },
 });
