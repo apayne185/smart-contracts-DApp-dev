@@ -68,8 +68,15 @@ static Result find_prefix(const std::string& prefix) {
     return r;
 }
 
-int main() {
-    const std::vector<std::string> targets = {"cafe", "faded", "decade"};
+int main(int argc, char* argv[]) {
+    // Accept optional target prefixes as arguments; defaults to the full benchmark suite.
+    // Example: ./pow cafe faded      (quick)
+    //          ./pow                 (full: cafe, faded, decade)
+    const std::vector<std::string> targets =
+        (argc > 1)
+            ? std::vector<std::string>(argv + 1, argv + argc)
+            : std::vector<std::string>{"cafe", "faded", "decade"};
+
     const unsigned int nthreads = std::thread::hardware_concurrency();
 
     std::cout << "Parallel SHA-256 PoW prefix finder\n";
