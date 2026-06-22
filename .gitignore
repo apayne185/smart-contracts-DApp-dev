@@ -6,31 +6,11 @@ typechain-types/
 .pnpm-store/
 npm-debug.log*
 
-**/deployed-address.txt
-**/VendingMachine.abi.json
-**/TicketOffice.abi.json
-
-**/apps/keys.json
+deployments/
 .env
 .env.local
 *.pem
 *.key
-
-.venv/
-venv/
-env/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.python-version
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-**/apps/server/app.db
-*.sqlite
-*.sqlite3
 
 .vscode/
 .idea/
@@ -41,3 +21,11 @@ Thumbs.db
 
 *.log
 logs/
+
+# C++ build artifacts
+build/
+*.o
+*.a
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
