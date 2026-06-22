@@ -1,7 +1,7 @@
 services:
   ganache:
     image: trufflesuite/ganache:latest
-    container_name: ganache-ex1
+    container_name: ganache
     ports:
       - "8545:8545"
     command: >
