@@ -247,7 +247,7 @@ contract TicketOffice {
     function eventCount() external view returns (uint256) { return eventIds.length; }
     function allEventIds() external view returns (uint256[] memory) { return eventIds; }
 
-    function getEvent(uint256 id) external view returns (
+    function getEventById(uint256 id) external view returns (
         uint256 eid, string memory name, uint256 priceWei,
         uint256 totalSupply, uint256 sold, uint256 eventDate, bool active
     ) {
