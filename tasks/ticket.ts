@@ -18,7 +18,7 @@ function loadAbi() {
 // ── ticket:list ───────────────────────────────────────────────────────────────
 task(["ticket", "list"], "List all events")
   .setInlineAction(async (_args, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const office = new ethers.Contract(loadAddress(), loadAbi(), (await ethers.getSigners())[0]);
     const ids: bigint[] = await office.allEventIds();
     if (ids.length === 0) { console.log("No events."); return; }
@@ -26,7 +26,7 @@ task(["ticket", "list"], "List all events")
     console.log("ID   Name                  Price (ETH)   Supply  Sold  Active  Date");
     console.log("─".repeat(68));
     for (const id of ids) {
-      const [, name, price, supply, sold, date, active] = await office.getEvent(id);
+      const [, name, price, supply, sold, date, active] = await office.getEventById(id);
       const dateStr = new Date(Number(date) * 1000).toLocaleDateString();
       console.log(
         `${String(id).padEnd(5)}${name.padEnd(22)}${ethers.formatEther(price).padEnd(14)}` +
@@ -39,10 +39,10 @@ task(["ticket", "list"], "List all events")
 task(["ticket", "buy"], "Buy one ticket for an event at face price")
   .addOption({ name: "eventId", description: "Event ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ eventId }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const [, user] = await ethers.getSigners();
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
-    const [, name, price] = await office.getEvent(eventId);
+    const [, name, price] = await office.getEventById(eventId);
     console.log(`Buying ticket for "${name}" @ ${ethers.formatEther(price)} ETH...`);
     const rc = await (await office.buyTicket(eventId, { value: price })).wait();
     const parsed = rc.logs
@@ -55,7 +55,7 @@ task(["ticket", "buy"], "Buy one ticket for an event at face price")
 task(["ticket", "my-tickets"], "List tickets owned by an address")
   .addOption({ name: "address", description: "Address to check (defaults to signer[1])", type: ArgumentType.STRING_WITHOUT_DEFAULT })
   .setInlineAction(async ({ address }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const signers = await ethers.getSigners();
     const who = address ?? signers[1].address;
     const office = new ethers.Contract(loadAddress(), loadAbi(), signers[0]);
@@ -64,7 +64,7 @@ task(["ticket", "my-tickets"], "List tickets owned by an address")
     console.log(`Tickets owned by ${who}:`);
     for (const tid of ids) {
       const [, eventId] = await office.getTicket(tid);
-      const [, name]    = await office.getEvent(eventId);
+      const [, name]    = await office.getEventById(eventId);
       const [listPrice, listed] = await office.getListing(tid);
       const tag = listed ? ` [listed @ ${ethers.formatEther(listPrice)} ETH]` : "";
       console.log(`  Ticket #${tid} — ${name}${tag}`);
@@ -76,7 +76,7 @@ task(["ticket", "transfer"], "Transfer a ticket to another address")
   .addOption({ name: "ticketId", description: "Ticket ID",           type: ArgumentType.BIGINT, defaultValue: 1n })
   .addOption({ name: "to",       description: "Recipient address",   type: ArgumentType.STRING, defaultValue: "" })
   .setInlineAction(async ({ ticketId, to }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const [, user] = await ethers.getSigners();
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.transferTicket(ticketId, to)).wait();
@@ -88,7 +88,7 @@ task(["ticket", "list-resale"], "List a ticket for resale")
   .addOption({ name: "ticketId", description: "Ticket ID",       type: ArgumentType.BIGINT, defaultValue: 1n })
   .addOption({ name: "price",    description: "Resale price ETH", type: ArgumentType.STRING, defaultValue: "0.03" })
   .setInlineAction(async ({ ticketId, price }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const [, user] = await ethers.getSigners();
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.listForResale(ticketId, ethers.parseEther(price))).wait();
@@ -99,7 +99,7 @@ task(["ticket", "list-resale"], "List a ticket for resale")
 task(["ticket", "cancel-listing"], "Cancel a resale listing")
   .addOption({ name: "ticketId", description: "Ticket ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ ticketId }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const [, user] = await ethers.getSigners();
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.cancelListing(ticketId)).wait();
@@ -110,7 +110,7 @@ task(["ticket", "cancel-listing"], "Cancel a resale listing")
 task(["ticket", "buy-resale"], "Buy a ticket listed on the secondary market")
   .addOption({ name: "ticketId", description: "Ticket ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ ticketId }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const [, user] = await ethers.getSigners();
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     const [price] = await office.getListing(ticketId);
@@ -125,7 +125,7 @@ task(["ticket", "create"], "Admin: create a new event")
   .addOption({ name: "supply", description: "Total ticket supply", type: ArgumentType.BIGINT, defaultValue: 100n })
   .addOption({ name: "date",   description: "Event date (unix ts)", type: ArgumentType.BIGINT, defaultValue: BigInt(Math.floor(Date.now() / 1000) + 86400 * 30) })
   .setInlineAction(async ({ name, price, supply, date }, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const office = new ethers.Contract(loadAddress(), loadAbi(), (await ethers.getSigners())[0]);
     await (await office.createEvent(name, ethers.parseEther(price), supply, date)).wait();
     console.log(`Created event "${name}"`);
@@ -134,7 +134,7 @@ task(["ticket", "create"], "Admin: create a new event")
 // ── ticket:withdraw ───────────────────────────────────────────────────────────
 task(["ticket", "withdraw"], "Admin: withdraw collected ETH")
   .setInlineAction(async (_args, hre) => {
-    const { ethers } = await hre.network.connect();
+    const { ethers } = await hre.network.getOrCreate();
     const admin = (await ethers.getSigners())[0];
     const office = new ethers.Contract(loadAddress(), loadAbi(), admin);
     const bal = await ethers.provider.getBalance(loadAddress());

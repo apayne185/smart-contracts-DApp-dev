@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { network } from "hardhat";
 
-const { ethers } = await network.connect();
+const { ethers } = await network.getOrCreate();
 
 describe("TicketOffice", function () {
   let office, owner, alice, bob, carol;
@@ -23,7 +23,7 @@ describe("TicketOffice", function () {
       .to.emit(office, "TicketPurchased")
       .withArgs(1n, 1n, alice.address, ROCK.price);
 
-    const [, , , , sold] = await office.getEvent(1);
+    const [, , , , sold] = await office.getEventById(1);
     expect(sold).to.equal(1n);
     const [, evId, ticketOwner] = await office.getTicket(1);
     expect(evId).to.equal(1n);
