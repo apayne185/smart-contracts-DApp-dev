@@ -3,9 +3,6 @@
 // Finds the smallest N such that SHA256("bitcoin" + N) starts with a target prefix.
 // Uses std::thread to partition the search space across all available CPU cores,
 // with a shared std::atomic flag to halt all threads the moment one finds a match.
-//
-// Mirrors the Python brute-force in sha256.py / pow.py, but eliminates the GIL
-// and exploits multi-core parallelism for a significant real-world speedup.
 #include <atomic>
 #include <chrono>
 #include <cstdint>
