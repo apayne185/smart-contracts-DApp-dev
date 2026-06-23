@@ -24,12 +24,13 @@ End-to-end implementations across two layers of the blockchain stack:
 │   └── TicketOffice.sol
 ├── scripts/
 │   ├── deploy-vending.ts
-│   ├── deploy-ticket.ts
-│   ├── vending.ts       CLI: list, buy, add, restock, withdraw
-│   └── tickets.ts       CLI: buy, transfer, resell, cancel
+│   └── deploy-ticket.ts
+├── tasks/
+│   ├── vending.ts       Hardhat tasks: list, buy, add, restock, price, withdraw, balance
+│   └── ticket.ts        Hardhat tasks: list, buy, my-tickets, transfer, list-resale, buy-resale, create, withdraw
 ├── test/
-│   ├── VendingMachine.test.js
-│   └── TicketOffice.test.js
+│   ├── VendingMachine.test.ts
+│   └── TicketOffice.test.ts
 ├── ganache/docker-compose.yml
 ├── CMakeLists.txt
 ├── hardhat.config.ts
@@ -178,10 +179,11 @@ On-chain vending machine: admin manages a product catalog (name, price, stock); 
 ```bash
 npm run deploy:vending
 
-npm run vending -- list
-npm run vending -- buy 1 2
-npm run vending -- add "Water" 0.003 50
-npm run vending -- withdraw
+npx hardhat vending list
+npx hardhat vending buy --product-id 1 --qty 2
+npx hardhat vending add --name "Water" --price 0.003 --stock 50
+npx hardhat vending restock --product-id 1 --qty 10
+npx hardhat vending withdraw
 ```
 
 ### TicketOffice — `contracts/TicketOffice.sol`
@@ -196,12 +198,13 @@ Key flows:
 ```bash
 npm run deploy:ticket
 
-npm run tickets -- list-events
-npm run tickets -- buy 1
-npm run tickets -- my-tickets
-npm run tickets -- list-resale 1 0.03
-npm run tickets -- buy-resale 1
-npm run tickets -- transfer 1 0xRecipientAddress
+npx hardhat ticket list
+npx hardhat ticket buy --event-id 1
+npx hardhat ticket my-tickets
+npx hardhat ticket list-resale --ticket-id 1 --price 0.03
+npx hardhat ticket buy-resale --ticket-id 1
+npx hardhat ticket transfer --ticket-id 1 --to 0xRecipientAddress
+npx hardhat ticket withdraw
 ```
 
 ### Tests
