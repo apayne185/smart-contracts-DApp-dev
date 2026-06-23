@@ -24,9 +24,11 @@ jobs:
       - name: Build all targets
         run: cmake --build build -j$(nproc)
 
+      - name: SHA-256 known-answer tests (NIST FIPS 180-4 vectors)
+        run: ctest --test-dir build --output-on-failure
+
       - name: pow — find SHA256 prefix 'cafe' (< 1s)
-        # Passes a single short prefix so CI completes quickly.
-        # Full benchmark suite (cafe, faded, decade) can be run locally.
+        # Single short prefix keeps CI fast; full suite (cafe/faded/decade) runs locally.
         run: ./build/pow cafe
 
       - name: collision — birthday attack on djb2 hash
