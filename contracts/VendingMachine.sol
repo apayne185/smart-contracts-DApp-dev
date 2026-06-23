@@ -36,7 +36,7 @@ contract VendingMachine {
     error RefundFailed();
     error WithdrawFailed();
 
-    //evemts
+    // events
     event ProductAdded(uint256 indexed id, string name, uint256 priceWei, uint256 stock);
     event ProductRestocked(uint256 indexed id, uint256 addedQty, uint256 newStock);
     event PriceUpdated(uint256 indexed id, uint256 oldPrice, uint256 newPrice);

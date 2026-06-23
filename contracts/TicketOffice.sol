@@ -62,7 +62,7 @@ contract TicketOffice {
 
 
 
-    // evetns
+    // events
     event EventCreated(uint256 indexed id, string name, uint256 priceWei, uint256 totalSupply, uint256 eventDate);
     event EventActiveChanged(uint256 indexed id, bool active);
     event PriceUpdated(uint256 indexed id, uint256 oldPrice, uint256 newPrice);
@@ -227,7 +227,7 @@ contract TicketOffice {
         t.owner = msg.sender;
         delete listings[ticketId];
 
-        // intrecations
+        // interactions
         (bool ok, ) = payable(seller).call{value: price}("");
         if (!ok) revert PaymentFailed();
 
