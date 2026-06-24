@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ── C++ cryptographic engines ───────────────────────────────────────────────
+  cpp:
+    name: C++ build & smoke tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get install -y g++ cmake
+
+      - name: Configure (Release)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build all targets
+        run: cmake --build build -j$(nproc)
+
+      - name: SHA-256 known-answer tests (NIST FIPS 180-4 vectors)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: pow — find SHA256 prefix 'cafe' (< 1s)
+        # Single short prefix keeps CI fast; full suite (cafe/faded/decade) runs locally.
+        run: ./build/pow cafe
+
+      - name: collision — birthday attack on djb2 hash
+        run: ./build/collision
+
+      - name: tx_builder — P2PKH transaction serialisation demo
+        run: ./build/tx_builder
+
+  # ── Solidity smart contracts ────────────────────────────────────────────────
+  solidity:
+    name: Hardhat tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run build
+
+      - name: Run test suite
+        run: npm test
