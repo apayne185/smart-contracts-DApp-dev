@@ -24,7 +24,7 @@ jobs:
       - name: Build all targets
         run: cmake --build build -j$(nproc)
 
-      - name: SHA-256 known-answer tests (NIST FIPS 180-4 vectors)
+      - name: Known-answer tests (SHA-256 FIPS 180-4 + SHA-3 FIPS 202)
         run: ctest --test-dir build --output-on-failure
 
       - name: pow — find SHA256 prefix 'cafe' (< 1s)
