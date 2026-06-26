@@ -32,4 +32,8 @@ std::string to_hex(const std::array<uint8_t, N>& d);
 std::string to_hex(const std::vector<uint8_t>& d);
 std::string to_hex(const uint8_t* data, size_t len);
 
+// Zero-allocation output variant — writes directly into caller-supplied buffer.
+// Use this in tight loops to avoid repeated std::vector heap allocation.
+void shake256_into(const uint8_t* data, size_t len, uint8_t* out, size_t out_len);
+
 } // namespace sha3
