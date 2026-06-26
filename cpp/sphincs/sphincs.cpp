@@ -70,6 +70,7 @@ static constexpr size_t THASH_BUF_MAX = N + 32 + LEN * N;
 static Bytes_N thash(const uint8_t* pk_seed, const Adrs& adrs,
                      const uint8_t* in, size_t in_len)
 {
+    assert(in_len <= LEN * N);  // buf sized for LEN*N; callers must not exceed this
     uint8_t buf[THASH_BUF_MAX];
     memcpy(buf,          pk_seed, N);
     memcpy(buf + N,      adrs.data, 32);
@@ -94,6 +95,7 @@ static Bytes_N prf(const Bytes_N& pk_seed, const Bytes_N& sk_seed, const Adrs& a
 static Bytes_N prf_msg(const Bytes_N& sk_prf, const Bytes_N& opt_rand,
                         const uint8_t* msg, size_t msg_len)
 {
+    if (msg_len > SIZE_MAX - 2 * N) throw std::length_error("message too large");
     std::vector<uint8_t> buf(N + N + msg_len);
     memcpy(buf.data(),       sk_prf.data(), N);
     memcpy(buf.data() + N,   opt_rand.data(), N);
@@ -108,6 +110,7 @@ static std::vector<uint8_t> h_msg(const Bytes_N& R, const Bytes_N& pk_seed,
                                    const Bytes_N& pk_root,
                                    const uint8_t* msg, size_t msg_len)
 {
+    if (msg_len > SIZE_MAX - 3 * N) throw std::length_error("message too large");
     std::vector<uint8_t> buf(3 * N + msg_len);
     memcpy(buf.data(),       R.data(), N);
     memcpy(buf.data() + N,   pk_seed.data(), N);
@@ -383,7 +386,7 @@ static Bytes_N fors_leaf(const Bytes_N& sk_seed, const Bytes_N& pk_seed,
 // Build the full k FORS trees, return the compressed public key and the
 // signature (k chosen leaves + their auth paths) for the given indices.
 static std::pair<Bytes_N, ForsSig>
-fors_sign_and_pk(const uint8_t* indices, // K indices, each A bits
+fors_sign_and_pk(const uint16_t* indices, // K indices, each A bits
                  const Bytes_N& sk_seed, const Bytes_N& pk_seed,
                  uint32_t keypair_idx,
                  const Adrs& base_adrs)
@@ -402,6 +405,7 @@ fors_sign_and_pk(const uint8_t* indices, // K indices, each A bits
         Adrs adrs = base_adrs;
         adrs.set_type(AdrsType::FORS_PRF);
         adrs.set_keypair(keypair_idx);
+        adrs.set_tree_height(0);
         adrs.set_tree_index(static_cast<uint32_t>(t * leaves + idx));
         fsig.sk_values[t] = prf(pk_seed, sk_seed, adrs);
 
@@ -453,7 +457,7 @@ fors_sign_and_pk(const uint8_t* indices, // K indices, each A bits
 
 // Recover FORS public key from signature
 static Bytes_N fors_pk_from_sig(const ForsSig& fsig,
-                                  const uint8_t* indices,
+                                  const uint16_t* indices,
                                   const Bytes_N& pk_seed,
                                   uint32_t keypair_idx,
                                   const Adrs& base_adrs)
@@ -511,7 +515,7 @@ static Bytes_N fors_pk_from_sig(const ForsSig& fsig,
 //   leaf_idx       : from next ceil(hp/8) bytes = 1 byte (HP=9 fits in 12 bits)
 
 struct DigestParts {
-    uint8_t  fors_indices[K]; // each 0..2^A-1
+    uint16_t fors_indices[K]; // each 0..2^A-1; A=12 requires 12 bits, uint8_t would truncate
     uint64_t tree_idx;        // which HT tree at layer 0
     uint32_t leaf_idx;        // leaf within that tree
 };
@@ -557,6 +561,8 @@ static void random_bytes(uint8_t* out, size_t n) {
     std::ifstream rng("/dev/urandom", std::ios::binary);
     if (!rng) throw std::runtime_error("Cannot open /dev/urandom");
     rng.read(reinterpret_cast<char*>(out), static_cast<std::streamsize>(n));
+    if (static_cast<size_t>(rng.gcount()) != n)
+        throw std::runtime_error("Short read from /dev/urandom");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

@@ -11,9 +11,15 @@
 // Reference: NIST FIPS PUB 202, August 2015.
 #include "sha3.h"
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <iomanip>
 #include <sstream>
+
+// The fast-absorb path word-XORs 8 bytes at a time, which is correct only on
+// little-endian hosts where a uint64_t lane and its byte representation agree.
+static_assert(std::endian::native == std::endian::little,
+              "sha3: fast absorb path requires little-endian host");
 
 namespace sha3 {
 
