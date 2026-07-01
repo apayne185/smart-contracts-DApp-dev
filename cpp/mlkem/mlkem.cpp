@@ -39,10 +39,12 @@ using  PolyMat = std::array<PolyVec, K>;
 
 // ── Modular arithmetic ────────────────────────────────────────────────────────
 
-// Reduce x to [0, Q-1].  Works for any signed 32-bit value.
+// Reduce x to [0, Q-1] without data-dependent branches.
+// x % Q lies in (-(Q-1), Q-1); the arithmetic right-shift produces a mask
+// of all-ones when the remainder is negative, adding Q only in that case.
 static inline int16_t rq(int32_t x) {
     x %= Q;
-    if (x < 0) x += Q;
+    x += Q & (x >> 31);   // add Q iff x is negative
     return static_cast<int16_t>(x);
 }
 
