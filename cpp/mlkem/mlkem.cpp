@@ -21,6 +21,10 @@
 
 namespace mlkem {
 
+static_assert(K*384 + 32          == EK_BYTES,  "EK_BYTES mismatch");
+static_assert(K*384 + EK_BYTES + 64 == DK_BYTES, "DK_BYTES mismatch");
+static_assert(K*DU*N/8 + DV*N/8   == CT_BYTES,  "CT_BYTES mismatch");
+
 // ── Internal polynomial type ──────────────────────────────────────────────────
 
 struct Poly    { int16_t c[N] = {}; };
