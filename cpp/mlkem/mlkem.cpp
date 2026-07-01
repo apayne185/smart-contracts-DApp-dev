@@ -245,17 +245,19 @@ static Poly sample_ntt(const uint8_t* rho, uint8_t i, uint8_t j) {
     seed[32] = i;
     seed[33] = j;
 
-    constexpr size_t OUTBYTES = 504;  // 168 bytes per Keccak block × 3
+    // 504 bytes = 168 three-byte groups → 336 candidates.
+    // Each candidate is accepted with probability Q/4096 ≈ 81.3%.
+    // P(< 256 accepted from 336) < 10^{-30}; the throw is a safety net only.
+    // Callers must handle std::runtime_error if this is used in a library.
+    constexpr size_t OUTBYTES = 504;
     uint8_t buf[OUTBYTES];
     sha3::shake128_into(seed, 34, buf, OUTBYTES);
 
     Poly a;
     int cnt = 0, bi = 0;
     while (cnt < N) {
-        if (bi + 3 > (int)OUTBYTES) {
-            // Should not happen with OUTBYTES=504; expected ~400 bytes consumed
+        if (bi + 3 > (int)OUTBYTES)
             throw std::runtime_error("SampleNTT: XOF output exhausted");
-        }
         uint16_t d1 = buf[bi] | ((uint16_t)(buf[bi+1] & 0x0F) << 8);
         uint16_t d2 = (buf[bi+1] >> 4) | ((uint16_t)buf[bi+2] << 4);
         bi += 3;

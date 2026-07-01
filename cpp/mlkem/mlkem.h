@@ -40,6 +40,7 @@ struct KeyPair { EncapKey ek; DecapKey dk; };
 
 // Generate a key pair from a 64-byte seed (d ∥ z, each 32 bytes).
 // For random keys, fill seed from a CSPRNG before calling.
+// Throws std::runtime_error (astronomically unlikely; see sample_ntt).
 KeyPair keygen(const std::array<uint8_t, 64>& seed);
 
 // Encapsulate: produce a shared secret and ciphertext.
