@@ -505,13 +505,12 @@ SharedSecret decaps(const DecapKey& dk, const Ciphertext& ct) {
     for (size_t i = 0; i < CT_BYTES; ++i)
         diff |= ct.data()[i] ^ ct_prime.data()[i];
 
-    SharedSecret result;
+    // diff==0 → mask=0x00 → use K_prime; diff!=0 → mask=0xFF → use K_bar
     const uint8_t* K_prime = g_out.data();
-    for (size_t i = 0; i < SS_BYTES; ++i) {
-        // diff==0 → use K_prime, diff!=0 → use K_bar
-        uint8_t mask = static_cast<uint8_t>(-static_cast<int8_t>(diff != 0));
+    uint8_t mask = static_cast<uint8_t>(-static_cast<int8_t>(diff != 0));
+    SharedSecret result;
+    for (size_t i = 0; i < SS_BYTES; ++i)
         result[i] = (K_prime[i] & ~mask) | (K_bar[i] & mask);
-    }
     return result;
 }
 
