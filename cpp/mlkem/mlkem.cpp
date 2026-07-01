@@ -203,13 +203,10 @@ static Poly byte_decode(const uint8_t* in, int d) {
 
 static Poly compress(const Poly& p, int d) {
     Poly r;
-    int32_t half = 1 << (d-1);    // rounding offset (2^{d-1} for unbiased round)
-    // round(x * 2^d / Q) = (x * 2^d + Q/2) / Q
+    // round(x * 2^d / Q) = floor((x * 2^d + Q/2) / Q) mod 2^d
     for (int i = 0; i < N; ++i) {
-        // Use 64-bit to avoid overflow: x * 2^d ≤ 3328 * 1024 ≈ 3.4M
         int32_t x = static_cast<int32_t>(p.c[i]);
         r.c[i] = static_cast<int16_t>(((x << d) + Q/2) / Q % (1 << d));
-        (void)half;
     }
     return r;
 }
