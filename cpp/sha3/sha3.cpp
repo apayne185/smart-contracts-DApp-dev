@@ -199,13 +199,22 @@ std::vector<uint8_t> shake256(std::string_view s, size_t outbytes) {
     return shake256(reinterpret_cast<const uint8_t*>(s.data()), s.size(), outbytes);
 }
 
+void shake128_into(const uint8_t* data, size_t len, uint8_t* out, size_t out_len) {
+    static constexpr size_t RATE = 168;
+    Sponge s(RATE);
+    s.absorb(data, len);
+    s.finalize(DOMAIN_SHAKE);
+    for (size_t i = 0; i < out_len; ++i) {
+        if (s.pos == RATE) { keccak_f1600(s.state); s.pos = 0; }
+        out[i] = read_byte(s.state, s.pos++);
+    }
+}
+
 void shake256_into(const uint8_t* data, size_t len, uint8_t* out, size_t out_len) {
-    // Allocation-free variant: squeeze directly into caller's buffer.
     static constexpr size_t RATE = 136;
     Sponge s(RATE);
     s.absorb(data, len);
     s.finalize(DOMAIN_SHAKE);
-    // Inline squeeze to avoid vector allocation
     for (size_t i = 0; i < out_len; ++i) {
         if (s.pos == RATE) { keccak_f1600(s.state); s.pos = 0; }
         out[i] = read_byte(s.state, s.pos++);

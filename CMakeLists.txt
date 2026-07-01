@@ -50,7 +50,17 @@ target_link_libraries(sha3_test PRIVATE sha3)
 add_executable(sphincs_test cpp/sphincs/sphincs_test.cpp)
 target_link_libraries(sphincs_test PRIVATE sphincs sha3)
 
+# ML-KEM / CRYSTALS-Kyber-512 — post-quantum key encapsulation (FIPS 203)
+add_library(mlkem STATIC cpp/mlkem/mlkem.cpp)
+target_link_libraries(mlkem PRIVATE sha3)
+target_include_directories(mlkem PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
+
+# ML-KEM round-trip tests
+add_executable(mlkem_test cpp/mlkem/mlkem_test.cpp)
+target_link_libraries(mlkem_test PRIVATE mlkem sha3)
+
 enable_testing()
-add_test(NAME sha256_vectors  COMMAND sha256_test)
-add_test(NAME sha3_vectors    COMMAND sha3_test)
+add_test(NAME sha256_vectors    COMMAND sha256_test)
+add_test(NAME sha3_vectors      COMMAND sha3_test)
 add_test(NAME sphincs_roundtrip COMMAND sphincs_test)
+add_test(NAME mlkem_roundtrip   COMMAND mlkem_test)
