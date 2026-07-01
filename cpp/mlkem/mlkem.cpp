@@ -311,12 +311,12 @@ static PKE_KeyPair pke_keygen(const uint8_t* d) {
     const uint8_t* rho   = g_out.data();       // bytes 0..31
     const uint8_t* sigma = g_out.data() + 32;  // bytes 32..63
 
-    // Expand matrix A_hat: A_hat[i][j] = SampleNTT(ρ, i, j)
+    // Expand matrix A_hat: A_hat[i][j] = SampleNTT(ρ, j, i)  (FIPS 203 §5.1 Alg 13)
     PolyMat A_hat;
     for (int i = 0; i < K; ++i)
         for (int j = 0; j < K; ++j)
-            A_hat[i][j] = sample_ntt(rho, static_cast<uint8_t>(i),
-                                          static_cast<uint8_t>(j));
+            A_hat[i][j] = sample_ntt(rho, static_cast<uint8_t>(j),
+                                          static_cast<uint8_t>(i));
 
     // Sample secret s and noise e via PRF_η1
     PolyVec s_hat, e_hat;
@@ -367,12 +367,12 @@ static void pke_encrypt(uint8_t* ct,
     for (int i = 0; i < K; ++i)
         t_hat[i] = byte_decode(ek + i*384, 12);
 
-    // Expand A^T: A_hat[i][j] = SampleNTT(ρ, j, i)  (swapped → transpose)
+    // Expand A^T: AT_hat[i][j] = A[j][i] = SampleNTT(ρ, i, j)  (FIPS 203 §5.2 Alg 14)
     PolyMat AT_hat;
     for (int i = 0; i < K; ++i)
         for (int j = 0; j < K; ++j)
-            AT_hat[i][j] = sample_ntt(rho, static_cast<uint8_t>(j),
-                                           static_cast<uint8_t>(i));
+            AT_hat[i][j] = sample_ntt(rho, static_cast<uint8_t>(i),
+                                           static_cast<uint8_t>(j));
 
     // Sample r_vec, e1, e2 via PRF_η1/η2
     PolyVec r_hat, e1;
