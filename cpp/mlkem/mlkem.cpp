@@ -21,6 +21,12 @@
 
 namespace mlkem {
 
+// Zero a buffer in a way the compiler cannot optimise away.
+static void secure_zero(void* p, size_t n) {
+    volatile uint8_t* vp = static_cast<volatile uint8_t*>(p);
+    for (size_t i = 0; i < n; ++i) vp[i] = 0;
+}
+
 static_assert(K*384 + 32          == EK_BYTES,  "EK_BYTES mismatch");
 static_assert(K*384 + EK_BYTES + 64 == DK_BYTES, "DK_BYTES mismatch");
 static_assert(K*DU*N/8 + DV*N/8   == CT_BYTES,  "CT_BYTES mismatch");
@@ -316,12 +322,14 @@ static PKE_KeyPair pke_keygen(const uint8_t* d) {
         prf(prf_out, sizeof(prf_out), sigma, N_byte);
         s_hat[i] = sample_cbd(prf_out, ETA1);
         ntt(s_hat[i]);
+        secure_zero(prf_out, sizeof(prf_out));
     }
     for (int i = 0; i < K; ++i, ++N_byte) {
         uint8_t prf_out[64 * ETA1];
         prf(prf_out, sizeof(prf_out), sigma, N_byte);
         e_hat[i] = sample_cbd(prf_out, ETA1);
         ntt(e_hat[i]);
+        secure_zero(prf_out, sizeof(prf_out));
     }
 
     // t_hat = A_hat ∘ s_hat + e_hat
@@ -338,6 +346,7 @@ static PKE_KeyPair pke_keygen(const uint8_t* d) {
     for (int i = 0; i < K; ++i)
         byte_encode(kp.dk + i*384, s_hat[i], 12);  // dk = ByteEncode_12(s)
 
+    secure_zero(g_out.data(), g_out.size());     // wipe ρ∥σ from stack
     return kp;
 }
 
@@ -369,15 +378,18 @@ static void pke_encrypt(uint8_t* ct,
         prf(prf_out, sizeof(prf_out), r, N_byte);
         r_hat[i] = sample_cbd(prf_out, ETA1);
         ntt(r_hat[i]);
+        secure_zero(prf_out, sizeof(prf_out));
     }
     for (int i = 0; i < K; ++i, ++N_byte) {
         uint8_t prf_out[64 * ETA2];
         prf(prf_out, sizeof(prf_out), r, N_byte);
         e1[i] = sample_cbd(prf_out, ETA2);
+        secure_zero(prf_out, sizeof(prf_out));
     }
     uint8_t e2_prf[64 * ETA2];
     prf(e2_prf, sizeof(e2_prf), r, N_byte);
     Poly e2 = sample_cbd(e2_prf, ETA2);
+    secure_zero(e2_prf, sizeof(e2_prf));
 
     // u = NTT^{-1}(A^T ∘ r_hat) + e1
     PolyVec u = mat_vec_mul(AT_hat, r_hat);
@@ -515,6 +527,11 @@ SharedSecret decaps(const DecapKey& dk, const Ciphertext& ct) {
     SharedSecret result;
     for (size_t i = 0; i < SS_BYTES; ++i)
         result[i] = (K_prime[i] & ~mask) | (K_bar[i] & mask);
+
+    secure_zero(m_prime, sizeof(m_prime));
+    secure_zero(g_in,    sizeof(g_in));
+    secure_zero(g_out.data(), g_out.size());
+    secure_zero(j_in,    sizeof(j_in));
     return result;
 }
 
