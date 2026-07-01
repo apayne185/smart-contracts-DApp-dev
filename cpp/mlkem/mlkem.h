@@ -21,7 +21,7 @@ static constexpr int    K    = 2;     // module rank
 static constexpr int    Q    = 3329;  // polynomial modulus
 static constexpr int    N    = 256;   // polynomial degree
 static constexpr int    ETA1 = 3;     // noise distribution for s, e  (keygen)
-static constexpr int    ETA2 = 2;     // noise distribution for r,e1,e2 (encaps)
+static constexpr int    ETA2 = 2;     // noise distribution for e1, e2 (encaps); r uses ETA1
 static constexpr int    DU   = 10;    // bits per u coefficient after compression
 static constexpr int    DV   = 4;     // bits per v coefficient after compression
 
