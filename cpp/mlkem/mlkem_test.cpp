@@ -22,6 +22,7 @@ static std::vector<uint8_t> from_hex(const std::string& s) {
     for (size_t i = 0; i < s.size(); i += 2) {
         auto nib = [](char c) -> uint8_t {
             if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
+            if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
             return static_cast<uint8_t>(c - 'a' + 10);
         };
         v.push_back(static_cast<uint8_t>((nib(s[i]) << 4) | nib(s[i+1])));
