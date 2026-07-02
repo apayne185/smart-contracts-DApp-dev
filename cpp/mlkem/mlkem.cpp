@@ -236,9 +236,11 @@ static Poly decompress(const Poly& p, int d) {
 // ── Sampling ──────────────────────────────────────────────────────────────────
 
 // SampleNTT (Algorithm 7): generate a uniform NTT-domain polynomial from XOF.
-// seed = ρ (32 bytes) followed by two single-byte indices (i, j).
+// Puts first_arg at seed[32] and second_arg at seed[33] — callers control byte
+// order.  Keygen passes (j, i) to build A[i][j] = SampleNTT(ρ, j, i) per FIPS
+// 203 Alg 13; encrypt passes (i, j) for the transpose A^T per Alg 14.
 static Poly sample_ntt(const uint8_t* rho, uint8_t i, uint8_t j) {
-    // XOF = SHAKE128(ρ ∥ i ∥ j, outbytes)
+    // XOF = SHAKE128(ρ ∥ first_arg ∥ second_arg, outbytes)
     // Each 3-byte group yields two 12-bit candidates; ~500 bytes is always enough.
     uint8_t seed[34];
     memcpy(seed, rho, 32);
