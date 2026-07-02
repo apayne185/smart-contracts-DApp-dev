@@ -5,7 +5,7 @@
 
 End-to-end implementations across two layers of the blockchain stack:
 
-- **C++17 cryptographic engines** (`cpp/`) — SHA-256 from the FIPS spec, parallel proof-of-work, birthday attack cryptanalysis, and a raw Bitcoin P2PKH transaction builder. No crypto libraries.
+- **C++17 cryptographic engines** (`cpp/`) — SHA-256, SHA-3/Keccak, and SPHINCS+ (SLH-DSA) post-quantum signatures from the FIPS specs, parallel proof-of-work, birthday attack cryptanalysis, and a raw Bitcoin P2PKH transaction builder. No crypto libraries.
 - **Solidity smart contracts** (`contracts/`) — a vending machine and a ticketing system with secondary resale, exercised by TypeScript CLI scripts via ethers.js.
 
 ---
@@ -16,6 +16,8 @@ End-to-end implementations across two layers of the blockchain stack:
 .
 ├── cpp/
 │   ├── sha256/          SHA-256 from FIPS PUB 180-4 (no OpenSSL)
+│   ├── sha3/            SHA-3 / Keccak from FIPS PUB 202 — SHA3-256/512, SHAKE128/256
+│   ├── sphincs/         SPHINCS+ / SLH-DSA-SHAKE-128s from FIPS PUB 205 (post-quantum)
 │   ├── pow/             Parallel prefix brute-forcer  (std::thread + std::atomic)
 │   ├── collision/       Birthday attack on djb2 32-bit hash
 │   └── bitcoin/         Raw P2PKH transaction builder (Base58Check, varint, SIGHASH_ALL)
@@ -76,6 +78,73 @@ Maj(x,y,z) = (x & y) ^ (x & z) ^ (y & z)
 ```
 
 Message padding, block split, message schedule (`W[0..63]`), and 64-round compression are all explicit. Used as the shared primitive by `pow` and `tx_builder`.
+
+---
+
+### SHA-3 / Keccak — `cpp/sha3/`
+
+Verbatim implementation of FIPS PUB 202 — no OpenSSL. Provides SHA3-256, SHA3-512, SHAKE128, and SHAKE256.
+
+The core is the **Keccak-f[1600]** permutation operating on a 5×5 array of 64-bit lanes (1600-bit state). Each of the 24 rounds applies five steps:
+
+```
+θ (Theta)  — XOR each bit with the parity of two columns
+ρ (Rho)    — rotate each of the 25 lanes by a fixed offset
+π (Pi)     — permute lanes to a new (x, y) position
+χ (Chi)    — non-linear mixing: A[x] ^= (~A[x+1]) & A[x+2]
+ι (Iota)   — XOR one of 24 round constants into A[0][0]
+```
+
+The **sponge construction** absorbs the padded message in `rate`-byte blocks, then squeezes out as many output bytes as needed — enabling both fixed-length hashes (SHA-3) and extendable output (SHAKE):
+
+| Variant   | Rate      | Capacity  | Output  |
+|-----------|-----------|-----------|---------|
+| SHA3-256  | 1088 bits | 512 bits  | 256 bit |
+| SHA3-512  | 576 bits  | 1024 bits | 512 bit |
+| SHAKE128  | 1344 bits | 256 bits  | XOF     |
+| SHAKE256  | 1088 bits | 512 bits  | XOF     |
+
+SHA-3 is the hash function used by Ethereum (`keccak256` is the pre-standardisation variant) and is the underlying primitive for the SPHINCS+ post-quantum signature scheme below. Verified against 9 NIST FIPS 202 known-answer vectors.
+
+```bash
+./build/sha3_test
+```
+
+---
+
+### SPHINCS+ / SLH-DSA — `cpp/sphincs/`
+
+Post-quantum hash-based digital signatures (NIST FIPS PUB 205). Implements the **SLH-DSA-SHAKE-128s** parameter set — the smallest standardised instance, targeting 128-bit post-quantum security. No external crypto library; the only primitive is SHAKE256 from `cpp/sha3/`.
+
+Quantum computers running Grover's algorithm halve the effective security of hash functions and break ECDSA/RSA entirely via Shor's algorithm. SPHINCS+ is immune: its security reduces only to the collision-resistance of the underlying hash, which Grover's cuts from 128 to 64 bits — still above the 64-bit threshold at this parameter set.
+
+The scheme is a four-layer stack:
+
+| Layer | What it does |
+|-------|-------------|
+| **WOTS+** | One-time signature on a single *n*-byte value: LEN=35 chains of length *w*=16 hash steps |
+| **XMSS** | Merkle tree of 2^*hp*=512 WOTS+ public keys; signs one message per leaf |
+| **HT** | *d*=7 stacked XMSS trees (hypertree); each layer authenticates the root below |
+| **FORS** | Few-time signature on the message digest indices; *k*=14 trees of height *a*=12 |
+
+Parameter set (FIPS 205 Table 1 — SLH-DSA-SHAKE-128s):
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| *n* | 16 B | security / hash output size |
+| *h* | 63 | total hypertree height |
+| *d* | 7 | XMSS layers |
+| *h/d* | 9 | leaves per XMSS tree (512) |
+| *a* | 12 | FORS tree height (4096 leaves each) |
+| *k* | 14 | FORS trees |
+| *w* | 16 | Winternitz parameter |
+| **sig** | **7 856 B** | signature size |
+
+The tweakable hash functions (`F`, `H`, `T_ℓ`, `PRF`, `PRF_msg`, `H_msg`) all call `SHAKE256(PK.seed ‖ ADRS ‖ input)` with a 32-byte domain-separation address (ADRS) that encodes layer, tree, and node type — preventing any cross-context hash reuse.
+
+```bash
+./build/sphincs_test
+```
 
 ---
 
