@@ -33,7 +33,6 @@ End-to-end implementations across two layers of the blockchain stack:
 ├── test/
 │   ├── VendingMachine.test.ts
 │   └── TicketOffice.test.ts
-├── ganache/docker-compose.yml
 ├── CMakeLists.txt
 ├── hardhat.config.ts
 └── package.json
@@ -235,8 +234,8 @@ Serialised raw transaction (191 bytes): 0100000001b2a1f6e5...
 ### Prerequisites
 
 ```bash
-docker compose -f ganache/docker-compose.yml up -d   # local Ganache at :8545
 npm install
+npm run node        # local Hardhat node at :8545, keep this terminal open
 ```
 
 ### VendingMachine — `contracts/VendingMachine.sol`
