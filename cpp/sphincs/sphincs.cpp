@@ -11,9 +11,9 @@
 //   SLH-DSA keygen / sign / verify (§9–10)
 #include "sphincs.h"
 #include "../sha3/sha3.h"
+#include "../common/randombytes.h"
 #include <cassert>
 #include <cstring>
-#include <fstream>
 #include <stdexcept>
 
 namespace sphincs {
@@ -99,7 +99,7 @@ static Bytes_N prf_msg(const Bytes_N& sk_prf, const Bytes_N& opt_rand,
     std::vector<uint8_t> buf(N + N + msg_len);
     memcpy(buf.data(),       sk_prf.data(), N);
     memcpy(buf.data() + N,   opt_rand.data(), N);
-    memcpy(buf.data() + 2*N, msg, msg_len);
+    if (msg_len) memcpy(buf.data() + 2*N, msg, msg_len);  // msg may be null when empty
     Bytes_N out;
     sha3::shake256_into(buf.data(), buf.size(), out.data(), N);
     return out;
@@ -115,7 +115,7 @@ static std::vector<uint8_t> h_msg(const Bytes_N& R, const Bytes_N& pk_seed,
     memcpy(buf.data(),       R.data(), N);
     memcpy(buf.data() + N,   pk_seed.data(), N);
     memcpy(buf.data() + 2*N, pk_root.data(), N);
-    memcpy(buf.data() + 3*N, msg, msg_len);
+    if (msg_len) memcpy(buf.data() + 3*N, msg, msg_len);  // msg may be null when empty
     std::vector<uint8_t> out(M);
     sha3::shake256_into(buf.data(), buf.size(), out.data(), M);
     return out;
@@ -555,16 +555,6 @@ static DigestParts parse_digest(const std::vector<uint8_t>& md) {
     return dp;
 }
 
-// ── Random bytes ──────────────────────────────────────────────────────────────
-
-static void random_bytes(uint8_t* out, size_t n) {
-    std::ifstream rng("/dev/urandom", std::ios::binary);
-    if (!rng) throw std::runtime_error("Cannot open /dev/urandom");
-    rng.read(reinterpret_cast<char*>(out), static_cast<std::streamsize>(n));
-    if (static_cast<size_t>(rng.gcount()) != n)
-        throw std::runtime_error("Short read from /dev/urandom");
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed) {
@@ -590,7 +580,7 @@ Signature sign(const uint8_t* msg, size_t msg_len,
     if (opt_rand_in) {
         memcpy(opt_rand.data(), opt_rand_in, N);
     } else {
-        random_bytes(opt_rand.data(), N);
+        crypto::randombytes(opt_rand.data(), N);
     }
 
     // 1. Randomise the message

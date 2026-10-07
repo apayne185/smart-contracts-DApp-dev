@@ -1,10 +1,11 @@
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import { configVariable, defineConfig } from "hardhat/config";
-import "./tasks/vending.js";
-import "./tasks/ticket.js";
+import { ticketTasks } from "./tasks/ticket.js";
+import { vendingTasks } from "./tasks/vending.js";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
+  tasks:   [...vendingTasks, ...ticketTasks],
   solidity: {
     profiles: {
       default: {
@@ -23,10 +24,11 @@ export default defineConfig({
     tests:   "./test",
   },
   networks: {
-    ganache: {
+    // Local JSON-RPC node started with `npm run node`
+    localhost: {
       type:    "http",
       url:     "http://127.0.0.1:8545",
-      chainId: 1337,
+      chainId: 31337,
     },
     hardhatMainnet: { type: "edr-simulated", chainType: "l1" },
     hardhatOp:      { type: "edr-simulated", chainType: "op" },

@@ -11,6 +11,6 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["hardhat.config.ts", "tasks/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "include": ["hardhat.config.ts", "tasks/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "types/**/*.ts"],
   "exclude": ["node_modules", "dist", "artifacts", "cache"]
 }

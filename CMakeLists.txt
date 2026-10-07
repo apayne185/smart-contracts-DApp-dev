@@ -1,66 +1,97 @@
 cmake_minimum_required(VERSION 3.16)
-project(crypto-engines LANGUAGES CXX)
+project(crypto-engines VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g -fsanitize=address,undefined")
+# Build options. Defaults produce portable binaries; CI turns on WERROR.
+option(CRYPTO_NATIVE_ARCH "Tune for the host CPU (-march=native); binaries are not portable" OFF)
+option(CRYPTO_WERROR      "Treat compiler warnings as errors"                                OFF)
+option(CRYPTO_SANITIZE    "Build with AddressSanitizer and UndefinedBehaviorSanitizer"       OFF)
 
 find_package(Threads REQUIRED)
 
-# SHA-256 — shared by pow and tx_builder
-add_library(sha256 STATIC cpp/sha256/sha256.cpp)
-target_include_directories(sha256 PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
+# Shared compile settings applied to every target via an interface library.
+add_library(project_options INTERFACE)
+target_compile_options(project_options INTERFACE -Wall -Wextra -Wpedantic -Wshadow)
+if(CRYPTO_WERROR)
+  target_compile_options(project_options INTERFACE -Werror)
+endif()
+if(CRYPTO_NATIVE_ARCH)
+  target_compile_options(project_options INTERFACE -march=native)
+endif()
+if(CRYPTO_SANITIZE)
+  target_compile_options(project_options INTERFACE
+    -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
+  target_link_options(project_options INTERFACE -fsanitize=address,undefined)
+endif()
 
-# Parallel SHA-256 proof-of-work prefix finder
+# Helper: every target links project_options and sees cpp/ as its include root.
+function(crypto_target name)
+  target_link_libraries(${name} PRIVATE project_options)
+  target_include_directories(${name} PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
+endfunction()
+
+# ── Libraries ────────────────────────────────────────────────────────────────
+
+# OS CSPRNG wrapper (getrandom / getentropy)
+add_library(randombytes STATIC cpp/common/randombytes.cpp)
+crypto_target(randombytes)
+
+# SHA-256 (FIPS 180-4), shared by pow and tx_builder
+add_library(sha256 STATIC cpp/sha256/sha256.cpp)
+crypto_target(sha256)
+
+# SHA-3 / Keccak (FIPS 202), shared by SPHINCS+ and ML-KEM
+add_library(sha3 STATIC cpp/sha3/sha3.cpp)
+crypto_target(sha3)
+
+# SPHINCS+ / SLH-DSA-SHAKE-128s (FIPS 205)
+add_library(sphincs STATIC cpp/sphincs/sphincs.cpp)
+crypto_target(sphincs)
+target_link_libraries(sphincs PRIVATE sha3 randombytes)
+
+# ML-KEM-512 / CRYSTALS-Kyber (FIPS 203)
+add_library(mlkem STATIC cpp/mlkem/mlkem.cpp)
+crypto_target(mlkem)
+target_link_libraries(mlkem PRIVATE sha3)
+
+# ── Executables ──────────────────────────────────────────────────────────────
+
 add_executable(pow cpp/pow/pow.cpp)
+crypto_target(pow)
 target_link_libraries(pow PRIVATE sha256 Threads::Threads)
 
-# Birthday attack collision finder on djb2 32-bit hash
 add_executable(collision cpp/collision/collision.cpp)
+crypto_target(collision)
 target_link_libraries(collision PRIVATE Threads::Threads)
 
-# Raw Bitcoin P2PKH transaction builder
 add_executable(tx_builder cpp/bitcoin/tx_builder.cpp)
+crypto_target(tx_builder)
 target_link_libraries(tx_builder PRIVATE sha256)
 
-# SHA-3 / Keccak — shared by SPHINCS+ and future PQC modules (Kyber/ML-KEM)
-add_library(sha3 STATIC cpp/sha3/sha3.cpp)
-target_include_directories(sha3 PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-
-# SPHINCS+ / SLH-DSA-SHAKE-128s — post-quantum hash-based signatures (FIPS 205)
-add_library(sphincs STATIC cpp/sphincs/sphincs.cpp)
-target_link_libraries(sphincs PRIVATE sha3)
-target_include_directories(sphincs PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-
-# SHA-256 known-answer tests (NIST FIPS 180-4 vectors)
-add_executable(sha256_test cpp/sha256/sha256_test.cpp)
-target_link_libraries(sha256_test PRIVATE sha256)
-
-# SHA-3 / Keccak known-answer tests (NIST FIPS 202 vectors)
-add_executable(sha3_test cpp/sha3/sha3_test.cpp)
-target_link_libraries(sha3_test PRIVATE sha3)
-
-# SPHINCS+ / SLH-DSA round-trip tests
-add_executable(sphincs_test cpp/sphincs/sphincs_test.cpp)
-target_link_libraries(sphincs_test PRIVATE sphincs sha3)
-
-# ML-KEM / CRYSTALS-Kyber-512 — post-quantum key encapsulation (FIPS 203)
-add_library(mlkem STATIC cpp/mlkem/mlkem.cpp)
-target_link_libraries(mlkem PRIVATE sha3)
-target_include_directories(mlkem PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-
-# ML-KEM round-trip tests
-add_executable(mlkem_test cpp/mlkem/mlkem_test.cpp)
-target_link_libraries(mlkem_test PRIVATE mlkem sha3)
+# ── Tests ────────────────────────────────────────────────────────────────────
 
 enable_testing()
+
+foreach(t sha256 sha3 sphincs mlkem)
+  add_executable(${t}_test cpp/${t}/${t}_test.cpp)
+  crypto_target(${t}_test)
+  target_link_libraries(${t}_test PRIVATE ${t} sha3)
+endforeach()
+
+add_executable(randombytes_test cpp/common/randombytes_test.cpp)
+crypto_target(randombytes_test)
+target_link_libraries(randombytes_test PRIVATE randombytes)
+
+add_test(NAME randombytes_sanity COMMAND randombytes_test)
 add_test(NAME sha256_vectors    COMMAND sha256_test)
 add_test(NAME sha3_vectors      COMMAND sha3_test)
 add_test(NAME sphincs_roundtrip COMMAND sphincs_test)
-add_test(NAME mlkem_roundtrip   COMMAND mlkem_test)
+add_test(NAME mlkem_kat         COMMAND mlkem_test)

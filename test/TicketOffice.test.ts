@@ -1,10 +1,13 @@
 import { expect } from "chai";
 import { network } from "hardhat";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { TicketOffice } from "../types/ethers-contracts/index.js";
 
 const { ethers } = await network.getOrCreate();
 
 describe("TicketOffice", function () {
-  let office, owner, alice, bob, carol;
+  let office: TicketOffice;
+  let owner: HardhatEthersSigner, alice: HardhatEthersSigner, bob: HardhatEthersSigner, carol: HardhatEthersSigner;
   const ROCK = { name: "Rock Concert", price: ethers.parseEther("0.02"), supply: 3 };
   const TECH = { name: "Tech Meetup",  price: ethers.parseEther("0.01"), supply: 2 };
   const FAR_FUTURE = 4102444800; // 2100-01-01

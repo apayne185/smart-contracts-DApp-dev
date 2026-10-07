@@ -3,16 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build":          "hardhat build",
-    "test":           "hardhat test",
-    "deploy:vending": "hardhat run scripts/deploy-vending.ts --network ganache",
-    "deploy:ticket":  "hardhat run scripts/deploy-ticket.ts  --network ganache"
+    "build": "hardhat build",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:vending": "hardhat run scripts/deploy-vending.ts --network localhost",
+    "deploy:ticket": "hardhat run scripts/deploy-ticket.ts  --network localhost",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
-    "chai":    "^5.1.2",
-    "hardhat": "^3.0.0-next.0"
+    "@types/mocha": "^10.0.10",
+    "chai": "^5.1.2",
+    "hardhat": "^3.18.1"
   }
 }

@@ -2,7 +2,7 @@ import { network } from "hardhat";
 import fs from "fs";
 import path from "path";
 
-const { ethers, networkName } = await network.connect();
+const { ethers, networkName } = await network.getOrCreate();
 
 console.log(`Deploying TicketOffice to ${networkName}...`);
 

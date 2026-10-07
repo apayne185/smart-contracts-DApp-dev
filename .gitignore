@@ -4,6 +4,7 @@ artifacts/
 cache/
 coverage/
 typechain-types/
+types/ethers-contracts/
 .pnpm-store/
 npm-debug.log*
 
