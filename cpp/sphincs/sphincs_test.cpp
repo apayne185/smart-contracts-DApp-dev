@@ -11,6 +11,7 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -67,14 +68,18 @@ static void test_kat_keygen() {
     }
 }
 
+static sphincs::SecretKey parse_sk(const std::vector<uint8_t>& skb) {
+    sphincs::SecretKey sk{};
+    std::copy(skb.begin(),      skb.begin() + 16, sk.sk_seed.begin());
+    std::copy(skb.begin() + 16, skb.begin() + 32, sk.sk_prf.begin());
+    std::copy(skb.begin() + 32, skb.begin() + 48, sk.pk_seed.begin());
+    std::copy(skb.begin() + 48, skb.begin() + 64, sk.pk_root.begin());
+    return sk;
+}
+
 static void test_kat_sign() {
     for (const auto& tc : sphincs_kat::SIGN) {
-        auto skb = from_hex(tc.sk);
-        sphincs::SecretKey sk{};
-        std::copy(skb.begin(),      skb.begin() + 16, sk.sk_seed.begin());
-        std::copy(skb.begin() + 16, skb.begin() + 32, sk.sk_prf.begin());
-        std::copy(skb.begin() + 32, skb.begin() + 48, sk.pk_seed.begin());
-        std::copy(skb.begin() + 48, skb.begin() + 64, sk.pk_root.begin());
+        auto sk = parse_sk(from_hex(tc.sk));
         sphincs::PublicKey pk{sk.pk_seed, sk.pk_root};
 
         // FIPS 205 deterministic variant: opt_rand = PK.seed
@@ -89,6 +94,50 @@ static void test_kat_sign() {
         check(label + " signature matches", sha3::to_hex(digest.data(), digest.size()) == tc.sig_sha3_256);
         check(label + " verifies", sphincs::verify_internal(msg.data(), msg.size(), sig, pk));
     }
+}
+
+static void test_kat_sign_pure() {
+    for (const auto& tc : sphincs_kat::SIGN_PURE) {
+        auto sk = parse_sk(from_hex(tc.sk));
+        sphincs::PublicKey pk{sk.pk_seed, sk.pk_root};
+        auto opt_rand = tc.opt_rand ? from_hex(tc.opt_rand)
+                                    : std::vector<uint8_t>(sk.pk_seed.begin(), sk.pk_seed.end());
+        auto msg = from_hex(tc.message);
+        auto ctx = from_hex(tc.context);
+
+        auto sig = sphincs::sign(msg, sk, ctx, opt_rand.data());
+        auto digest = sha3::sha3_256(sig.data(), sig.size());
+        std::string label = "KAT pure sign tgId=" + std::to_string(tc.tg_id) +
+                            " tcId=" + std::to_string(tc.tc_id) +
+                            " ctx=" + std::to_string(ctx.size()) + "B";
+        check(label + " signature matches", sha3::to_hex(digest.data(), digest.size()) == tc.sig_sha3_256);
+        check(label + " verifies", sphincs::verify(msg, sig, pk, ctx));
+    }
+}
+
+// ── Context string behaviour ─────────────────────────────────────────────────
+
+static void test_context(const sphincs::SphincsKey& kp) {
+    std::vector<uint8_t> msg = {'t', 'x'};
+    std::vector<uint8_t> ctx_a = {'a', 'p', 'p', '-', 'a'};
+    std::vector<uint8_t> ctx_b = {'a', 'p', 'p', '-', 'b'};
+    std::array<uint8_t, sphincs::N> rand{};
+
+    auto sig = sphincs::sign(msg, kp.sk, ctx_a, rand.data());
+    check("context: verifies under the signing context", sphincs::verify(msg, sig, kp.pk, ctx_a));
+    check("context: rejected under a different context", !sphincs::verify(msg, sig, kp.pk, ctx_b));
+    check("context: rejected under the empty context",   !sphincs::verify(msg, sig, kp.pk));
+
+    // Pure signing must not be confused with signing M' directly.
+    check("context: internal verify of raw msg rejected",
+          !sphincs::verify_internal(msg.data(), msg.size(), sig, kp.pk));
+
+    std::vector<uint8_t> too_long(sphincs::MAX_CTX_BYTES + 1, 0x42);
+    bool threw = false;
+    try { (void)sphincs::sign(msg, kp.sk, too_long, rand.data()); }
+    catch (const std::invalid_argument&) { threw = true; }
+    check("context: 256-byte context rejected by sign", threw);
+    check("context: 256-byte context rejected by verify", !sphincs::verify(msg, sig, kp.pk, too_long));
 }
 
 // ── Component smoke tests ─────────────────────────────────────────────────────
@@ -117,6 +166,7 @@ int main() {
     std::cout << "NIST ACVP vectors (SLH-DSA-SHAKE-128s)...\n";
     test_kat_keygen();
     test_kat_sign();
+    test_kat_sign_pure();
     std::cout << "\n";
 
     // ── Fixed seed ────────────────────────────────────────────────────────────
@@ -129,6 +179,8 @@ int main() {
     bool pk_nonzero = false;
     for (auto b : kp.pk.pk_root) pk_nonzero |= (b != 0);
     check("keygen: pk_root non-zero", pk_nonzero);
+
+    test_context(kp);
 
     // Print PK.root so we can visually confirm
     std::cout << "  PK.root = " << hex(kp.pk.pk_root.data(), sphincs::N) << "\n";
