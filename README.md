@@ -140,13 +140,18 @@ The scheme is a four-layer stack:
 | *w* | 16 |
 | signature | 7 856 B |
 
-Every tweakable hash (`F`, `H`, `T_ℓ`, `PRF`, `PRF_msg`, `H_msg`) is `SHAKE256(PK.seed ‖ ADRS ‖ input)`, where the 32-byte address encodes layer, tree, and node type so that no hash call can be replayed in another context. Signing is randomised by default using `crypto::randombytes`; passing a fixed `opt_rand` gives deterministic signatures for testing.
+Every tweakable hash (`F`, `H`, `T_ℓ`, `PRF`, `PRF_msg`, `H_msg`) is `SHAKE256(PK.seed ‖ ADRS ‖ input)`, where the 32-byte address encodes layer, tree, and node type so that no hash call can be replayed in another context. Changing the address type clears its trailing fields, as FIPS 205 §4.3 requires.
+
+`sign` and `verify` implement the FIPS 205 **pure** interface (Algorithms 22 and 24). An optional context string of up to 255 bytes binds a signature to its purpose, so a signature made for one application cannot be replayed in another. Signing is randomised by default using `crypto::randombytes`; passing `PK.seed` as `opt_rand` selects the deterministic variant.
 
 ```cpp
+std::vector<uint8_t> ctx = {'t', 'x', '-', 'v', '1'};
 auto kp  = sphincs::keygen(seed48);
-auto sig = sphincs::sign(msg, kp.sk);           // randomised
-bool ok  = sphincs::verify(msg, sig, kp.pk);
+auto sig = sphincs::sign(msg, kp.sk, ctx);       // randomised
+bool ok  = sphincs::verify(msg, sig, kp.pk, ctx);
 ```
+
+Validated against the NIST ACVP vectors for key generation, the internal signing interface, and the pure interface (including empty and maximum-length contexts). Checking against these vectors found and fixed two deviations from FIPS 205 in XMSS hashing that round-trip tests could not detect, because signing and verification shared them.
 
 ---
 
@@ -236,12 +241,12 @@ Run `npx hardhat vending` or `npx hardhat ticket` to list every subcommand. To d
 
 ## Security model
 
-**In scope.** Functional correctness against the NIST specifications, verified with known-answer tests. Memory safety, checked by running the full test suite under ASan and UBSan in CI. Basic timing hygiene in ML-KEM: branch-free reduction and decapsulation selection, plus wiping of secret intermediates.
+**In scope.** Functional correctness against the NIST specifications, verified with NIST ACVP known-answer tests for ML-KEM, SLH-DSA, SHA-3, and SHA-256. Memory safety, checked by running the full test suite under ASan and UBSan in CI. Basic timing hygiene in ML-KEM: branch-free reduction and decapsulation selection, plus wiping of secret intermediates.
 
 **Not yet verified.**
 
 - Constant-time behaviour is enforced in the source but has not been checked at the binary level (for example with dudect or a Valgrind-based taint check). Compilers can reintroduce branches.
-- SLH-DSA has round-trip and tamper tests but is not yet checked against the official FIPS 205 known-answer vectors.
+- The FIPS 205 pre-hash signing variant (HashSLH-DSA) is not implemented.
 - Power, electromagnetic, and fault-injection attacks are out of scope.
 - The smart contracts have not been audited or formally verified.
 
@@ -260,7 +265,7 @@ Randomness comes only from the operating system (`getrandom` on Linux, `getentro
 
 ## Roadmap
 
-- [ ] FIPS 205 known-answer vectors for SLH-DSA
+- [x] FIPS 205 known-answer vectors and the pure signing interface for SLH-DSA
 - [ ] libFuzzer harnesses for decapsulation, signature verification, and Base58 decoding
 - [ ] Binary-level constant-time verification in CI
 - [ ] Benchmarks (cycles per operation) compared against liboqs
