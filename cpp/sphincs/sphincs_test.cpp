@@ -1,9 +1,12 @@
 // SPHINCS+ / SLH-DSA-SHAKE-128s — functional test suite
 //
-// Tests the full sign/verify round trip and rejection of tampered data.
+// Tests the full sign/verify round trip and rejection of tampered data,
+// plus NIST ACVP known-answer vectors for keygen and signing.
 // Key generation and signing are deterministic when opt_rand is supplied.
 #include "sphincs.h"
+#include "sphincs_kat_vectors.h"
 #include "../sha3/sha3.h"
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstring>
@@ -30,6 +33,64 @@ static std::string hex(const uint8_t* p, size_t n) {
     return s;
 }
 
+static std::vector<uint8_t> from_hex(const std::string& s) {
+    std::vector<uint8_t> v;
+    v.reserve(s.size() / 2);
+    for (size_t i = 0; i < s.size(); i += 2) {
+        auto nib = [](char c) -> uint8_t {
+            if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
+            if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
+            return static_cast<uint8_t>(c - 'a' + 10);
+        };
+        v.push_back(static_cast<uint8_t>((nib(s[i]) << 4) | nib(s[i+1])));
+    }
+    return v;
+}
+
+// ── NIST ACVP known-answer tests ─────────────────────────────────────────────
+
+static void test_kat_keygen() {
+    for (const auto& tc : sphincs_kat::KEYGEN) {
+        std::array<uint8_t, 3 * sphincs::N> seed{};
+        auto sk_seed = from_hex(tc.sk_seed);
+        auto sk_prf  = from_hex(tc.sk_prf);
+        auto pk_seed = from_hex(tc.pk_seed);
+        std::copy(sk_seed.begin(), sk_seed.end(), seed.begin());
+        std::copy(sk_prf.begin(),  sk_prf.end(),  seed.begin() + sphincs::N);
+        std::copy(pk_seed.begin(), pk_seed.end(), seed.begin() + 2 * sphincs::N);
+
+        auto kp = sphincs::keygen(seed);
+        auto expected = from_hex(tc.pk);
+        bool ok = std::equal(kp.pk.pk_seed.begin(), kp.pk.pk_seed.end(), expected.begin()) &&
+                  std::equal(kp.pk.pk_root.begin(), kp.pk.pk_root.end(), expected.begin() + sphincs::N);
+        check("KAT keygen tcId=" + std::to_string(tc.tc_id), ok);
+    }
+}
+
+static void test_kat_sign() {
+    for (const auto& tc : sphincs_kat::SIGN) {
+        auto skb = from_hex(tc.sk);
+        sphincs::SecretKey sk{};
+        std::copy(skb.begin(),      skb.begin() + 16, sk.sk_seed.begin());
+        std::copy(skb.begin() + 16, skb.begin() + 32, sk.sk_prf.begin());
+        std::copy(skb.begin() + 32, skb.begin() + 48, sk.pk_seed.begin());
+        std::copy(skb.begin() + 48, skb.begin() + 64, sk.pk_root.begin());
+        sphincs::PublicKey pk{sk.pk_seed, sk.pk_root};
+
+        // FIPS 205 deterministic variant: opt_rand = PK.seed
+        auto opt_rand = tc.opt_rand ? from_hex(tc.opt_rand)
+                                    : std::vector<uint8_t>(sk.pk_seed.begin(), sk.pk_seed.end());
+        auto msg = from_hex(tc.message);
+
+        auto sig = sphincs::sign(msg.data(), msg.size(), sk, opt_rand.data());
+        auto digest = sha3::sha3_256(sig.data(), sig.size());
+        std::string label = "KAT sign tgId=" + std::to_string(tc.tg_id) +
+                            " tcId=" + std::to_string(tc.tc_id);
+        check(label + " signature matches", sha3::to_hex(digest.data(), digest.size()) == tc.sig_sha3_256);
+        check(label + " verifies", sphincs::verify(msg.data(), msg.size(), sig, pk));
+    }
+}
+
 // ── Component smoke tests ─────────────────────────────────────────────────────
 
 // Verify that keygen, sign, and verify are self-consistent by checking
@@ -53,6 +114,11 @@ static void test_roundtrip(const std::string& label,
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 int main() {
+    std::cout << "NIST ACVP vectors (SLH-DSA-SHAKE-128s)...\n";
+    test_kat_keygen();
+    test_kat_sign();
+    std::cout << "\n";
+
     // ── Fixed seed ────────────────────────────────────────────────────────────
     std::array<uint8_t, 3*sphincs::N> seed{};
     for (size_t i=0; i<seed.size(); ++i) seed[i] = static_cast<uint8_t>(i+1);
