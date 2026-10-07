@@ -180,13 +180,13 @@ int main() {
         auto exp_ss = from_hex("1f9d8a24f5757dc70746d2d1f48c016fc8213bd510b174171b73741bc60555d6");
 
         // Build typed inputs
-        std::array<uint8_t, 64> seed;
-        std::copy(d.begin(), d.end(), seed.begin());
-        std::copy(z.begin(), z.end(), seed.begin() + 32);
+        std::array<uint8_t, 64> seed_kat;
+        std::copy(d.begin(), d.end(), seed_kat.begin());
+        std::copy(z.begin(), z.end(), seed_kat.begin() + 32);
         std::array<uint8_t, 32> msg;
         std::copy(mv.begin(), mv.end(), msg.begin());
 
-        auto kp_kat = mlkem::keygen(seed);
+        auto kp_kat = mlkem::keygen(seed_kat);
         check("KAT: keygen ek matches NIST ACVP tcId=1",
               std::equal(exp_ek.begin(), exp_ek.end(), kp_kat.ek.begin()));
 

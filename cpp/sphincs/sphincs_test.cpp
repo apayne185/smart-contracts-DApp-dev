@@ -121,6 +121,13 @@ int main() {
               sphincs::verify(empty.data(), 0, sig_e, kp.pk));
     }
 
+    // ── Multi-block message (exceeds the SHAKE256 rate) ───────────────────────
+    {
+        std::vector<uint8_t> msg1k(1024);
+        for (size_t i = 0; i < msg1k.size(); ++i) msg1k[i] = static_cast<uint8_t>(i);
+        test_roundtrip("1 KiB msg:", seed, msg1k, zero_rand);
+    }
+
     std::cout << "\n" << passed << " passed, " << failed << " failed.\n";
     return failed > 0 ? 1 : 0;
 }
