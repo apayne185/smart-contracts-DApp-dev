@@ -41,7 +41,13 @@ struct Adrs {
 
     void set_layer(uint32_t layer)       { store32(data,  layer); }
     void set_tree(uint64_t tree)         { store64(data + 8, tree); }
-    void set_type(AdrsType t)            { store32(data + 16, static_cast<uint32_t>(t)); }
+    // FIPS 205 §4.3 setTypeAndClear: changing the type zeroes the three
+    // trailing words (key pair, chain/tree height, hash/tree index) so no
+    // stale field from the previous use leaks into the next hash call.
+    void set_type_and_clear(AdrsType t) {
+        store32(data + 16, static_cast<uint32_t>(t));
+        memset(data + 20, 0, 12);
+    }
     void set_keypair(uint32_t kp)        { store32(data + 20, kp); }
     void set_chain(uint32_t c)           { store32(data + 24, c); }
     void set_hash(uint32_t h)            { store32(data + 28, h); }
@@ -196,28 +202,29 @@ wots_keygen(const Bytes_N& sk_seed, const Bytes_N& pk_seed,
     Adrs adrs{};
     adrs.set_layer(layer);
     adrs.set_tree(tree_idx);
+    adrs.set_type_and_clear(AdrsType::WOTS_HASH);
     adrs.set_keypair(keypair_idx);
 
-    // Generate secret key elements via PRF
-    std::vector<Bytes_N> sk(LEN);
-    adrs.set_type(AdrsType::WOTS_PRF);
-    for (size_t i = 0; i < LEN; ++i) {
-        adrs.set_chain(static_cast<uint32_t>(i));
-        sk[i] = prf(pk_seed, sk_seed, adrs);
-    }
+    Adrs sk_adrs = adrs;
+    sk_adrs.set_type_and_clear(AdrsType::WOTS_PRF);
+    sk_adrs.set_keypair(keypair_idx);
 
-    // Compute public key elements by chaining W-1 times
-    adrs.set_type(AdrsType::WOTS_HASH);
+    // Generate secret key elements via PRF, then chain each W-1 times
+    std::vector<Bytes_N> sk(LEN);
     std::vector<uint8_t> pk_elements(LEN * N);
     for (size_t i = 0; i < LEN; ++i) {
+        sk_adrs.set_chain(static_cast<uint32_t>(i));
+        sk[i] = prf(pk_seed, sk_seed, sk_adrs);
         adrs.set_chain(static_cast<uint32_t>(i));
         Bytes_N pk_i = chain(sk[i], 0, W - 1, pk_seed, adrs);
         memcpy(pk_elements.data() + i * N, pk_i.data(), N);
     }
 
     // Compress public key
-    adrs.set_type(AdrsType::WOTS_PK);
-    Bytes_N pk = T_l(pk_seed, adrs, pk_elements.data(), LEN);
+    Adrs pk_adrs = adrs;
+    pk_adrs.set_type_and_clear(AdrsType::WOTS_PK);
+    pk_adrs.set_keypair(keypair_idx);
+    Bytes_N pk = T_l(pk_seed, pk_adrs, pk_elements.data(), LEN);
     return { std::move(sk), pk };
 }
 
@@ -234,17 +241,20 @@ wots_sign(const Bytes_N& msg, const Bytes_N& sk_seed, const Bytes_N& pk_seed,
     Adrs adrs{};
     adrs.set_layer(layer);
     adrs.set_tree(tree_idx);
+    adrs.set_type_and_clear(AdrsType::WOTS_HASH);
     adrs.set_keypair(keypair_idx);
 
+    Adrs sk_adrs = adrs;
+    sk_adrs.set_type_and_clear(AdrsType::WOTS_PRF);
+    sk_adrs.set_keypair(keypair_idx);
+
     std::vector<uint8_t> sig(LEN * N);
-    adrs.set_type(AdrsType::WOTS_PRF);
     for (size_t i = 0; i < LEN; ++i) {
+        sk_adrs.set_chain(static_cast<uint32_t>(i));
+        Bytes_N sk_i = prf(pk_seed, sk_seed, sk_adrs);
         adrs.set_chain(static_cast<uint32_t>(i));
-        Bytes_N sk_i = prf(pk_seed, sk_seed, adrs);
-        adrs.set_type(AdrsType::WOTS_HASH);
         Bytes_N sig_i = chain(sk_i, 0, msg_w[i], pk_seed, adrs);
         memcpy(sig.data() + i * N, sig_i.data(), N);
-        adrs.set_type(AdrsType::WOTS_PRF);
     }
     return sig;
 }
@@ -262,8 +272,8 @@ wots_pk_from_sig(const std::vector<uint8_t>& sig, const Bytes_N& msg,
     Adrs adrs{};
     adrs.set_layer(layer);
     adrs.set_tree(tree_idx);
+    adrs.set_type_and_clear(AdrsType::WOTS_HASH);
     adrs.set_keypair(keypair_idx);
-    adrs.set_type(AdrsType::WOTS_HASH);
 
     std::vector<uint8_t> pk_elements(LEN * N);
     for (size_t i = 0; i < LEN; ++i) {
@@ -274,8 +284,10 @@ wots_pk_from_sig(const std::vector<uint8_t>& sig, const Bytes_N& msg,
         memcpy(pk_elements.data() + i * N, pk_i.data(), N);
     }
 
-    adrs.set_type(AdrsType::WOTS_PK);
-    return T_l(pk_seed, adrs, pk_elements.data(), LEN);
+    Adrs pk_adrs = adrs;
+    pk_adrs.set_type_and_clear(AdrsType::WOTS_PK);
+    pk_adrs.set_keypair(keypair_idx);
+    return T_l(pk_seed, pk_adrs, pk_elements.data(), LEN);
 }
 
 // ── XMSS tree (§6) ───────────────────────────────────────────────────────────
@@ -305,14 +317,14 @@ static XmssTree xmss_tree(const Bytes_N& sk_seed, const Bytes_N& pk_seed,
     Adrs adrs{};
     adrs.set_layer(layer);
     adrs.set_tree(tree_idx);
-    adrs.set_type(AdrsType::HASH_TREE);
+    adrs.set_type_and_clear(AdrsType::HASH_TREE);
 
     for (size_t h = 0; h < HP; ++h) {
         size_t level_start = num_leaves >> (h + 1);
         for (size_t i = 0; i < (num_leaves >> (h + 1)); ++i) {
             size_t left  = (level_start << 1) + 2 * i;
             size_t right = left + 1;
-            adrs.set_tree_height(static_cast<uint32_t>(h));
+            adrs.set_tree_height(static_cast<uint32_t>(h + 1));  // leaves are height 0
             adrs.set_tree_index(static_cast<uint32_t>(i));  // i = within-level index
             nodes[level_start + i] = hash2(pk_seed, adrs, nodes[left], nodes[right]);
         }
@@ -340,12 +352,12 @@ static Bytes_N xmss_root_from_sig(Bytes_N leaf, uint32_t leaf_idx,
     Adrs adrs{};
     adrs.set_layer(layer);
     adrs.set_tree(tree_idx);
-    adrs.set_type(AdrsType::HASH_TREE);
+    adrs.set_type_and_clear(AdrsType::HASH_TREE);
 
     for (size_t h = 0; h < HP; ++h) {
         uint32_t idx_h = (leaf_idx >> h) & 1;
         uint32_t node_idx = (leaf_idx >> (h + 1));
-        adrs.set_tree_height(static_cast<uint32_t>(h));
+        adrs.set_tree_height(static_cast<uint32_t>(h + 1));  // leaves are height 0
         adrs.set_tree_index(node_idx);
         if (idx_h == 0)
             leaf = hash2(pk_seed, adrs, leaf, auth[h]);
@@ -371,13 +383,14 @@ static Bytes_N fors_leaf(const Bytes_N& sk_seed, const Bytes_N& pk_seed,
                           const Adrs& base_adrs)
 {
     Adrs adrs = base_adrs;
-    adrs.set_type(AdrsType::FORS_PRF);
+    adrs.set_type_and_clear(AdrsType::FORS_PRF);
     adrs.set_keypair(keypair_idx);
     adrs.set_tree_height(0);
     adrs.set_tree_index(tree * (1u << A) + leaf);
     Bytes_N sk = prf(pk_seed, sk_seed, adrs);
 
-    adrs.set_type(AdrsType::FORS_TREE);
+    adrs.set_type_and_clear(AdrsType::FORS_TREE);
+    adrs.set_keypair(keypair_idx);
     adrs.set_tree_height(0);
     adrs.set_tree_index(tree * (1u << A) + leaf);
     return F(pk_seed, adrs, sk);
@@ -403,7 +416,7 @@ fors_sign_and_pk(const uint16_t* indices, // K indices, each A bits
 
         // Secret leaf
         Adrs adrs = base_adrs;
-        adrs.set_type(AdrsType::FORS_PRF);
+        adrs.set_type_and_clear(AdrsType::FORS_PRF);
         adrs.set_keypair(keypair_idx);
         adrs.set_tree_height(0);
         adrs.set_tree_index(static_cast<uint32_t>(t * leaves + idx));
@@ -423,7 +436,7 @@ fors_sign_and_pk(const uint16_t* indices, // K indices, each A bits
                 size_t left  = (level_start << 1) + 2 * i;
                 size_t right = left + 1;
                 Adrs ha = base_adrs;
-                ha.set_type(AdrsType::FORS_TREE);
+                ha.set_type_and_clear(AdrsType::FORS_TREE);
                 ha.set_keypair(keypair_idx);
                 ha.set_tree_height(static_cast<uint32_t>(h + 1));
                 ha.set_tree_index(static_cast<uint32_t>(t * (leaves >> (h+1)) + i));
@@ -448,7 +461,7 @@ fors_sign_and_pk(const uint16_t* indices, // K indices, each A bits
     for (size_t t = 0; t < K; ++t)
         memcpy(roots_buf.data() + t * N, roots[t].data(), N);
     Adrs fors_pk_adrs = base_adrs;
-    fors_pk_adrs.set_type(AdrsType::FORS_ROOTS);
+    fors_pk_adrs.set_type_and_clear(AdrsType::FORS_ROOTS);
     fors_pk_adrs.set_keypair(keypair_idx);
     Bytes_N fors_pk = T_l(pk_seed, fors_pk_adrs, roots_buf.data(), K);
 
@@ -470,7 +483,7 @@ static Bytes_N fors_pk_from_sig(const ForsSig& fsig,
 
         // Recover leaf from secret value
         Adrs adrs = base_adrs;
-        adrs.set_type(AdrsType::FORS_TREE);
+        adrs.set_type_and_clear(AdrsType::FORS_TREE);
         adrs.set_keypair(keypair_idx);
         adrs.set_tree_height(0);
         adrs.set_tree_index(static_cast<uint32_t>(t * leaves + idx));
@@ -481,7 +494,7 @@ static Bytes_N fors_pk_from_sig(const ForsSig& fsig,
         Bytes_N node = leaf;
         for (size_t h = 0; h < A; ++h) {
             Adrs ha = base_adrs;
-            ha.set_type(AdrsType::FORS_TREE);
+            ha.set_type_and_clear(AdrsType::FORS_TREE);
             ha.set_keypair(keypair_idx);
             ha.set_tree_height(static_cast<uint32_t>(h + 1));
             ha.set_tree_index(static_cast<uint32_t>(t * (leaves >> h) / 2 + node_idx / 2));
@@ -498,7 +511,7 @@ static Bytes_N fors_pk_from_sig(const ForsSig& fsig,
     for (size_t t = 0; t < K; ++t)
         memcpy(roots_buf.data() + t * N, roots[t].data(), N);
     Adrs fors_pk_adrs = base_adrs;
-    fors_pk_adrs.set_type(AdrsType::FORS_ROOTS);
+    fors_pk_adrs.set_type_and_clear(AdrsType::FORS_ROOTS);
     fors_pk_adrs.set_keypair(keypair_idx);
     return T_l(pk_seed, fors_pk_adrs, roots_buf.data(), K);
 }

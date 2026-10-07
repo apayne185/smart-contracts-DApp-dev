@@ -78,7 +78,8 @@ using Signature = std::vector<uint8_t>;
 SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed);
 
 // Sign msg.  If opt_rand is non-null it must point to N bytes used as the
-// per-signature randomiser (set to all-zeros for deterministic signing).
+// per-signature randomiser; pass PK.seed for the FIPS 205 deterministic
+// variant.
 // Otherwise a random N-byte value is drawn from the OS CSPRNG
 // (crypto::randombytes).
 Signature sign(const uint8_t* msg, size_t msg_len,
