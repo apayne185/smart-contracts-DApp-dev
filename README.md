@@ -1,287 +1,276 @@
-# Blockchain & Cryptography Toolkit
+# Post-Quantum Cryptography & Blockchain Toolkit
 
 [![CI](https://github.com/apayne185/smart-contracts-DApp-dev/actions/workflows/ci.yml/badge.svg)](https://github.com/apayne185/smart-contracts-DApp-dev/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-End-to-end implementations across two layers of the blockchain stack:
+From-specification implementations of the NIST post-quantum standards and the hash primitives beneath them, written in dependency-free C++17, alongside Solidity contracts and TypeScript tooling for the application layer.
 
-- **C++17 cryptographic engines** (`cpp/`) — SHA-256, SHA-3/Keccak, and SPHINCS+ (SLH-DSA) post-quantum signatures from the FIPS specs, parallel proof-of-work, birthday attack cryptanalysis, and a raw Bitcoin P2PKH transaction builder. No crypto libraries.
-- **Solidity smart contracts** (`contracts/`) — a vending machine and a ticketing system with secondary resale, exercised by TypeScript CLI scripts via ethers.js.
+- **Post-quantum cryptography** (`cpp/`): ML-KEM-512 key encapsulation (FIPS 203) and SLH-DSA-SHAKE-128s signatures (FIPS 205), built on a from-scratch SHA-3/Keccak (FIPS 202). Verified against NIST known-answer vectors, tested under AddressSanitizer and UndefinedBehaviorSanitizer, and built with gcc and clang on Linux and macOS in CI.
+- **Blockchain primitives** (`cpp/`): SHA-256 (FIPS 180-4), a multithreaded proof-of-work search, and a byte-exact Bitcoin P2PKH transaction serialiser.
+- **Smart contracts** (`contracts/`): an event ticketing system with a peer-to-peer resale market and an on-chain vending machine, tested with Hardhat 3 and driven by typed CLI tasks.
+
+> **Security notice.** This code has not been audited. It is written to be correct and side-channel aware, but it is a learning and portfolio project. Do not use it to protect real assets or data. See [Security model](#security-model).
 
 ---
 
-## Repository Layout
+## Contents
+
+- [Repository layout](#repository-layout)
+- [Quick start](#quick-start)
+- [Post-quantum engines](#post-quantum-engines)
+- [Hash functions](#hash-functions)
+- [Blockchain primitives](#blockchain-primitives)
+- [Smart contracts](#smart-contracts)
+- [Security model](#security-model)
+- [Engineering practices](#engineering-practices)
+- [Roadmap](#roadmap)
+
+---
+
+## Repository layout
 
 ```
 .
 ├── cpp/
-│   ├── sha256/          SHA-256 from FIPS PUB 180-4 (no OpenSSL)
-│   ├── sha3/            SHA-3 / Keccak from FIPS PUB 202 — SHA3-256/512, SHAKE128/256
-│   ├── sphincs/         SPHINCS+ / SLH-DSA-SHAKE-128s from FIPS PUB 205 (post-quantum)
-│   ├── pow/             Parallel prefix brute-forcer  (std::thread + std::atomic)
-│   ├── collision/       Birthday attack on djb2 32-bit hash
-│   └── bitcoin/         Raw P2PKH transaction builder (Base58Check, varint, SIGHASH_ALL)
-├── contracts/
-│   ├── VendingMachine.sol
-│   └── TicketOffice.sol
-├── scripts/
-│   ├── deploy-vending.ts
-│   └── deploy-ticket.ts
-├── tasks/
-│   ├── vending.ts       Hardhat tasks: list, buy, add, restock, price, withdraw, balance
-│   └── ticket.ts        Hardhat tasks: list, buy, my-tickets, transfer, list-resale, buy-resale, create, withdraw
-├── test/
-│   ├── VendingMachine.test.ts
-│   └── TicketOffice.test.ts
-├── CMakeLists.txt
-├── hardhat.config.ts
-└── package.json
+│   ├── mlkem/        ML-KEM-512 key encapsulation (FIPS 203)
+│   ├── sphincs/      SLH-DSA-SHAKE-128s signatures (FIPS 205)
+│   ├── sha3/         SHA-3 / Keccak, SHA3-256/512, SHAKE128/256 (FIPS 202)
+│   ├── sha256/       SHA-256 (FIPS 180-4)
+│   ├── common/       randombytes: OS CSPRNG wrapper (getrandom / getentropy)
+│   ├── pow/          Multithreaded SHA-256 prefix search
+│   ├── collision/    Birthday attack on a 32-bit hash
+│   └── bitcoin/      Raw P2PKH transaction builder
+├── contracts/        TicketOffice.sol, VendingMachine.sol
+├── tasks/            Hardhat CLI tasks for interacting with deployed contracts
+├── scripts/          Deployment scripts
+├── test/             Hardhat + Mocha + Chai contract tests
+└── .github/          CI workflow and Dependabot configuration
 ```
 
 ---
 
-## C++ Cryptographic Engines
+## Quick start
 
-### Build
+### C++ engines
 
-Requires `g++ ≥ 11`, `cmake ≥ 3.16`, POSIX threads.
+Requires a C++17 compiler (gcc 11+ or clang 14+) and CMake 3.16+.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-Or directly with g++:
+Build options:
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `CRYPTO_NATIVE_ARCH` | `OFF` | Tune for the host CPU with `-march=native`. Faster, but the binaries are not portable. |
+| `CRYPTO_WERROR` | `OFF` | Treat warnings as errors. Enabled in CI. |
+| `CRYPTO_SANITIZE` | `OFF` | Build with AddressSanitizer and UndefinedBehaviorSanitizer. |
+
+### Smart contracts
+
+Requires Node.js 22+.
 
 ```bash
-g++ -std=c++17 -O3 -march=native cpp/sha256/sha256.cpp cpp/pow/pow.cpp       -o build/pow       -lpthread
-g++ -std=c++17 -O3 -march=native cpp/collision/collision.cpp                   -o build/collision -lpthread
-g++ -std=c++17 -O3 -march=native cpp/sha256/sha256.cpp cpp/bitcoin/tx_builder.cpp -o build/tx_builder
+npm ci
+npm run build        # compile contracts and generate TypeChain typings
+npm run typecheck    # strict tsc over config, tasks, scripts, and tests
+npm test             # Hardhat test suite
 ```
 
 ---
 
-### SHA-256 — `cpp/sha256/`
+## Post-quantum engines
 
-Verbatim implementation of FIPS PUB 180-4 §6.2 — no OpenSSL, no `<openssl/sha.h>`.
+Shor's algorithm breaks RSA and elliptic-curve cryptography, including the ECDSA signatures that secure Bitcoin and Ethereum today. NIST standardised replacements in 2024. This repository implements the two that cover the core needs of a blockchain client: key exchange and signatures.
 
-The six logical functions defined in §4.1.2:
+### ML-KEM-512 (`cpp/mlkem/`)
 
+Module-lattice key encapsulation, NIST FIPS 203 (formerly CRYSTALS-Kyber). Two parties use it to agree a 32-byte shared secret over an untrusted channel. Its security rests on the Module Learning With Errors problem, for which no efficient quantum algorithm is known.
+
+```cpp
+#include "mlkem/mlkem.h"
+#include "common/randombytes.h"
+
+std::array<uint8_t, 64> seed;  crypto::randombytes(seed.data(), seed.size());
+std::array<uint8_t, 32> m;     crypto::randombytes(m.data(), m.size());
+
+auto kp       = mlkem::keygen(seed);            // (ek, dk)
+auto [ss, ct] = mlkem::encaps(kp.ek, m);        // sender
+auto ss2      = mlkem::decaps(kp.dk, ct);       // receiver: ss2 == ss
 ```
-Ch(x,y,z)  = (x & y) ^ (~x & z)
-Maj(x,y,z) = (x & y) ^ (x & z) ^ (y & z)
-Σ₀(x) = ROTR(x, 2)  ^ ROTR(x, 13) ^ ROTR(x, 22)
-Σ₁(x) = ROTR(x, 6)  ^ ROTR(x, 11) ^ ROTR(x, 25)
-σ₀(x) = ROTR(x, 7)  ^ ROTR(x, 18) ^ (x >> 3)
-σ₁(x) = ROTR(x, 17) ^ ROTR(x, 19) ^ (x >> 10)
-```
-
-Message padding, block split, message schedule (`W[0..63]`), and 64-round compression are all explicit. Used as the shared primitive by `pow` and `tx_builder`.
-
----
-
-### SHA-3 / Keccak — `cpp/sha3/`
-
-Verbatim implementation of FIPS PUB 202 — no OpenSSL. Provides SHA3-256, SHA3-512, SHAKE128, and SHAKE256.
-
-The core is the **Keccak-f[1600]** permutation operating on a 5×5 array of 64-bit lanes (1600-bit state). Each of the 24 rounds applies five steps:
-
-```
-θ (Theta)  — XOR each bit with the parity of two columns
-ρ (Rho)    — rotate each of the 25 lanes by a fixed offset
-π (Pi)     — permute lanes to a new (x, y) position
-χ (Chi)    — non-linear mixing: A[x] ^= (~A[x+1]) & A[x+2]
-ι (Iota)   — XOR one of 24 round constants into A[0][0]
-```
-
-The **sponge construction** absorbs the padded message in `rate`-byte blocks, then squeezes out as many output bytes as needed — enabling both fixed-length hashes (SHA-3) and extendable output (SHAKE):
-
-| Variant   | Rate      | Capacity  | Output  |
-|-----------|-----------|-----------|---------|
-| SHA3-256  | 1088 bits | 512 bits  | 256 bit |
-| SHA3-512  | 576 bits  | 1024 bits | 512 bit |
-| SHAKE128  | 1344 bits | 256 bits  | XOF     |
-| SHAKE256  | 1088 bits | 512 bits  | XOF     |
-
-SHA-3 is the hash function used by Ethereum (`keccak256` is the pre-standardisation variant) and is the underlying primitive for the SPHINCS+ post-quantum signature scheme below. Verified against 9 NIST FIPS 202 known-answer vectors.
-
-```bash
-./build/sha3_test
-```
-
----
-
-### SPHINCS+ / SLH-DSA — `cpp/sphincs/`
-
-Post-quantum hash-based digital signatures (NIST FIPS PUB 205). Implements the **SLH-DSA-SHAKE-128s** parameter set — the smallest standardised instance, targeting 128-bit post-quantum security. No external crypto library; the only primitive is SHAKE256 from `cpp/sha3/`.
-
-Quantum computers running Grover's algorithm halve the effective security of hash functions and break ECDSA/RSA entirely via Shor's algorithm. SPHINCS+ is immune: its security reduces only to the collision-resistance of the underlying hash, which Grover's cuts from 128 to 64 bits — still above the 64-bit threshold at this parameter set.
-
-The scheme is a four-layer stack:
-
-| Layer | What it does |
-|-------|-------------|
-| **WOTS+** | One-time signature on a single *n*-byte value: LEN=35 chains of length *w*=16 hash steps |
-| **XMSS** | Merkle tree of 2^*hp*=512 WOTS+ public keys; signs one message per leaf |
-| **HT** | *d*=7 stacked XMSS trees (hypertree); each layer authenticates the root below |
-| **FORS** | Few-time signature on the message digest indices; *k*=14 trees of height *a*=12 |
-
-Parameter set (FIPS 205 Table 1 — SLH-DSA-SHAKE-128s):
 
 | Parameter | Value | Meaning |
 |-----------|-------|---------|
-| *n* | 16 B | security / hash output size |
-| *h* | 63 | total hypertree height |
-| *d* | 7 | XMSS layers |
-| *h/d* | 9 | leaves per XMSS tree (512) |
-| *a* | 12 | FORS tree height (4096 leaves each) |
-| *k* | 14 | FORS trees |
-| *w* | 16 | Winternitz parameter |
-| **sig** | **7 856 B** | signature size |
+| *k* | 2 | module rank |
+| *q* | 3329 | coefficient modulus |
+| *n* | 256 | polynomial degree |
+| *η₁*, *η₂* | 3, 2 | centred binomial noise widths |
+| *d_u*, *d_v* | 10, 4 | ciphertext compression bits |
+| sizes | ek 800 B, dk 1632 B, ct 768 B | |
 
-The tweakable hash functions (`F`, `H`, `T_ℓ`, `PRF`, `PRF_msg`, `H_msg`) all call `SHAKE256(PK.seed ‖ ADRS ‖ input)` with a 32-byte domain-separation address (ADRS) that encodes layer, tree, and node type — preventing any cross-context hash reuse.
+Implementation notes:
 
-```bash
-./build/sphincs_test
+- Number-theoretic transform (NTT) for polynomial multiplication, with matrix **Â** expanded from SHAKE128 by rejection sampling (`sample_ntt`) using the FIPS 203 index order.
+- The Fujisaki-Okamoto transform with **implicit rejection**: decapsulation re-encrypts and, if the ciphertext was tampered with, returns a pseudorandom value derived from the secret *z* rather than an error. The comparison and selection are branch-free.
+- Modular reduction uses arithmetic masking instead of conditional branches to avoid secret-dependent timing.
+- Secret intermediates (PRF output, *ρ‖σ*, *m′*) are wiped with a volatile write loop the compiler cannot elide.
+- Tested against the NIST ACVP known-answer vectors for keygen, encaps, and decaps, plus tamper, wrong-key, and determinism checks.
+
+### SLH-DSA-SHAKE-128s (`cpp/sphincs/`)
+
+Stateless hash-based signatures, NIST FIPS 205 (formerly SPHINCS+). Security reduces only to properties of the underlying hash function, which makes it the most conservative of the post-quantum signature standards. The 128s parameter set targets NIST security category 1 and optimises for small signatures.
+
+The scheme is a four-layer stack:
+
+| Layer | Role |
+|-------|------|
+| **WOTS+** | One-time signature on an *n*-byte value: 35 hash chains of length 16 |
+| **XMSS** | Merkle tree of 2⁹ = 512 WOTS+ keys |
+| **Hypertree** | 7 stacked XMSS layers, each authenticating the root below it |
+| **FORS** | Few-time signature on the message digest: 14 trees of height 12 |
+
+| Parameter | Value |
+|-----------|-------|
+| *n* | 16 B |
+| *h*, *d* | 63, 7 |
+| *a*, *k* | 12, 14 |
+| *w* | 16 |
+| signature | 7 856 B |
+
+Every tweakable hash (`F`, `H`, `T_ℓ`, `PRF`, `PRF_msg`, `H_msg`) is `SHAKE256(PK.seed ‖ ADRS ‖ input)`, where the 32-byte address encodes layer, tree, and node type so that no hash call can be replayed in another context. Signing is randomised by default using `crypto::randombytes`; passing a fixed `opt_rand` gives deterministic signatures for testing.
+
+```cpp
+auto kp  = sphincs::keygen(seed48);
+auto sig = sphincs::sign(msg, kp.sk);           // randomised
+bool ok  = sphincs::verify(msg, sig, kp.pk);
 ```
 
 ---
 
-### Parallel PoW — `cpp/pow/`
+## Hash functions
 
-Finds the smallest `N` such that `SHA256("bitcoinN")` starts with a target hex prefix — the same work function as Bitcoin block mining, at toy scale.
+### SHA-3 / Keccak (`cpp/sha3/`)
 
-**Threading model:** the candidate space is striped across all hardware threads. Thread `t` owns the sub-sequence `{t, t+N_threads, t+2·N_threads, …}`. A `std::atomic<bool>` signals the field the moment any thread finds a match, causing all others to exit cleanly.
+FIPS 202: SHA3-256, SHA3-512, SHAKE128, and SHAKE256 over the Keccak-f[1600] permutation. Each of the 24 rounds applies θ (column parity), ρ (lane rotation), π (lane permutation), χ (the only non-linear step), and ι (round constant). The sponge absorbs input at the rate and squeezes arbitrary-length output, which is what lets SHAKE act as the XOF and PRF inside both post-quantum schemes.
 
-```
-Thread 0: 0,  8, 16, 24, …
-Thread 1: 1,  9, 17, 25, …   →  first match  →  atomic flag  →  all exit
-…
-Thread 7: 7, 15, 23, 31, …
-```
+| Variant | Rate | Capacity | Output |
+|---------|------|----------|--------|
+| SHA3-256 | 1088 bits | 512 bits | 256 bits |
+| SHA3-512 | 576 bits | 1024 bits | 512 bits |
+| SHAKE128 | 1344 bits | 256 bits | variable |
+| SHAKE256 | 1088 bits | 512 bits | variable |
 
-**Benchmarks (8-core, `-O3 -march=native`):**
+Verified against NIST FIPS 202 known-answer vectors.
 
-| Prefix | Search space | N found | Time |
-|--------|-------------|---------|------|
-| `cafe` | 1 in 65 536 | 42 353 | **0.047 s** |
-| `faded` | 1 in 1 048 576 | 781 629 | **0.559 s** |
-| `decade` | 1 in 16 777 216 | 43 531 106 | **32.1 s** |
+### SHA-256 (`cpp/sha256/`)
 
-```bash
-./build/pow
-```
+FIPS 180-4 §6.2 with explicit padding, message schedule, and 64-round compression. Used by the proof-of-work search and the Bitcoin transaction builder. Verified against NIST FIPS 180-4 vectors.
 
 ---
 
-### Birthday Attack — `cpp/collision/`
+## Blockchain primitives
 
-Finds two distinct printable-ASCII strings that produce the same 32-bit output under the `djb2` hash variant used in the original coursework:
+### Parallel proof-of-work (`cpp/pow/`)
 
-```
-h = ((h << 5) - h + c) mod 2³²   // equivalent to h * 31 + c
-```
+Finds the smallest `N` such that `SHA256("bitcoinN")` begins with a target hex prefix, the same shape of work as Bitcoin mining at toy difficulty. The search space is striped across hardware threads (thread *t* tries *t*, *t + T*, *t + 2T*, ...) and a `std::atomic<bool>` stops every worker as soon as one finds a match.
 
-With only 2³² ≈ 4.3 billion possible digests, the birthday bound guarantees a collision after roughly √(2³²) ≈ 65 536 random inputs in expectation. An `std::unordered_map` pre-sized past the bound avoids mid-search rehashing.
-
-| Mode | Insertions | Time |
-|------|-----------|------|
-| Single-threaded | 184 324 | 0.073 s |
-| `--parallel` (8 threads, mutex-merged batches) | ~53 333 | 0.010 s |
+| Prefix | Expected tries | N found | Time (8 cores, native build) |
+|--------|----------------|---------|------------------------------|
+| `cafe` | 2¹⁶ | 42 353 | 0.047 s |
+| `faded` | 2²⁰ | 781 629 | 0.559 s |
+| `decade` | 2²⁴ | 43 531 106 | 32.1 s |
 
 ```bash
-./build/collision             # single-threaded, clean output + verification
-./build/collision --parallel  # parallel batch-merge strategy
+./build/pow cafe
 ```
+
+### Birthday attack (`cpp/collision/`)
+
+Finds two printable strings with the same 32-bit djb2-style hash (`h = h * 31 + c mod 2³²`). With 2³² possible outputs, a collision is expected after about 2¹⁶ inputs. Includes a multithreaded variant that merges per-thread batches.
+
+### Bitcoin P2PKH transaction builder (`cpp/bitcoin/`)
+
+Serialises a Pay-to-Public-Key-Hash transaction byte for byte with no Bitcoin library: Base58Check encode and decode, the `OP_DUP OP_HASH160 ... OP_CHECKSIG` script, CompactSize varints, the SIGHASH_ALL preimage, scriptSig layout, and TXID derivation. ECDSA signing is a labelled stub that prints the 32-byte digest to be signed.
 
 ---
 
-### Bitcoin P2PKH Transaction Builder — `cpp/bitcoin/`
+## Smart contracts
 
-Serialises a complete Pay-to-Public-Key-Hash transaction byte-for-byte without any Bitcoin library, following the Bitcoin wire protocol spec.
+### TicketOffice (`contracts/TicketOffice.sol`)
 
-Implemented from scratch:
+Event ticketing with primary sales, gifting, and a secondary resale market enforced on-chain without a platform intermediary. Tickets are tracked as contract records (not ERC-721 tokens; see the [roadmap](#roadmap)).
 
-| Component | What it does |
-|-----------|-------------|
-| **Base58Check** | encode/decode with full checksum (hash256 of version + payload) |
-| **P2PKH scriptPubKey** | `OP_DUP OP_HASH160 <hash160> OP_EQUALVERIFY OP_CHECKSIG` |
-| **varint / CompactSize** | 1/3/5/9-byte variable-length integer encoding |
-| **SIGHASH_ALL pre-image** | the exact byte sequence that gets hash256'd before signing |
-| **DER signature layout** | scriptSig assembly: `<len><sig+0x01><len><compressed_pubkey>` |
-| **TXID derivation** | hash256(raw_tx) reversed to display byte order |
+- **Primary sale:** the organiser creates an event; `buyTicket(eventId)` issues a ticket and refunds any overpayment.
+- **Transfer:** `transferTicket(ticketId, to)` moves a ticket and atomically cancels any active resale listing, so a gifted ticket cannot still be bought.
+- **Resale:** `listForResale` then `buyResale` moves ownership and pays the seller directly. State is updated before any external call (checks-effects-interactions).
 
-ECDSA signing is a clearly-labelled stub — the 32-byte signing digest is computed and printed; attaching `libsecp256k1` is a one-line substitution.
+### VendingMachine (`contracts/VendingMachine.sol`)
 
-```bash
-./build/tx_builder
-```
+An owner-managed catalogue with on-chain stock and per-buyer ownership records. Only trust-critical data (price, stock, ownership) lives on-chain; descriptions and images belong off-chain.
 
-```
-Source address (wallet A): mwAfVjnv1GGz3YXJw7z3qMZTwggx52Hbh7
-Dest   address (wallet B): mzH9MtN9qHfuDjcFjiAMmNXhm5vYRP99qi
-[OK] Base58Check encode/decode round-trip verified
-
-SIGHASH_ALL preimage (114 bytes): 0100000001b2a1f6e5...
-Signing digest: 3f98abeb43ab419879eb7c6c67e5b19208de8f8d89de2100fdbe3f61b1aa202b
-Serialised raw transaction (191 bytes): 0100000001b2a1f6e5...
-```
-
----
-
-## Solidity Smart Contracts
-
-### Prerequisites
+### Running locally
 
 ```bash
-npm install
-npm run node        # local Hardhat node at :8545, keep this terminal open
-```
-
-### VendingMachine — `contracts/VendingMachine.sol`
-
-On-chain vending machine: admin manages a product catalog (name, price, stock); users purchase and receive on-chain ownership receipts; overpayment is refunded atomically.
-
-**Design:** only trust-critical state lives on-chain (prices, stock, ownership). Product images and descriptions are off-chain by design — if removing them would let a user be deceived, they'd be on-chain. Checks-Effects-Interactions pattern prevents reentrancy on the refund path.
-
-```bash
-npm run deploy:vending
-
-npx hardhat vending list
-npx hardhat vending buy --product-id 1 --qty 2
-npx hardhat vending add --name "Water" --price 0.003 --stock 50
-npx hardhat vending restock --product-id 1 --qty 10
-npx hardhat vending withdraw
-```
-
-### TicketOffice — `contracts/TicketOffice.sol`
-
-Event ticketing contract with primary sales, peer-to-peer transfers, and a secondary resale market — all enforced on-chain with no platform intermediary.
-
-Key flows:
-- **Primary:** admin creates event → user `buyTicket(eventId)` → ticket NFT minted
-- **Transfer:** holder calls `transferTicket(ticketId, to)` — any active listing is cancelled atomically
-- **Resale:** holder `listForResale(ticketId, price)` → buyer `buyResale(ticketId)` — ETH flows directly to seller
-
-```bash
+npm run node              # terminal 1: local Hardhat node on :8545
+npm run deploy:vending    # terminal 2
 npm run deploy:ticket
-
-npx hardhat ticket list
-npx hardhat ticket buy --event-id 1
-npx hardhat ticket my-tickets
-npx hardhat ticket list-resale --ticket-id 1 --price 0.03
-npx hardhat ticket buy-resale --ticket-id 1
-npx hardhat ticket transfer --ticket-id 1 --to 0xRecipientAddress
-npx hardhat ticket withdraw
 ```
-
-### Tests
 
 ```bash
-npm test
+npx hardhat vending list --network localhost
+npx hardhat vending buy --product-id 1 --qty 2 --network localhost
+npx hardhat vending balance --product-id 1 --network localhost
+
+npx hardhat ticket list --network localhost
+npx hardhat ticket buy --event-id 1 --network localhost
+npx hardhat ticket list-resale --ticket-id 1 --price 0.03 --network localhost
+npx hardhat ticket buy-resale --ticket-id 1 --network localhost
 ```
 
-| Contract | Test cases |
-|----------|-----------|
-| VendingMachine | purchase success + event, insufficient payment, stock exhaustion, `onlyOwner` guard, state changes, overpayment refund |
-| TicketOffice | buy + emit, insufficient payment, sold-out, transfer + emit, transfer clears listing, non-owner transfer reverts, resale full flow, self-transfer guard |
+Run `npx hardhat vending` or `npx hardhat ticket` to list every subcommand. To deploy to Sepolia, copy `.env.example` to `.env` and fill in the RPC URL and deployer key.
+
+---
+
+## Security model
+
+**In scope.** Functional correctness against the NIST specifications, verified with known-answer tests. Memory safety, checked by running the full test suite under ASan and UBSan in CI. Basic timing hygiene in ML-KEM: branch-free reduction and decapsulation selection, plus wiping of secret intermediates.
+
+**Not yet verified.**
+
+- Constant-time behaviour is enforced in the source but has not been checked at the binary level (for example with dudect or a Valgrind-based taint check). Compilers can reintroduce branches.
+- SLH-DSA has round-trip and tamper tests but is not yet checked against the official FIPS 205 known-answer vectors.
+- Power, electromagnetic, and fault-injection attacks are out of scope.
+- The smart contracts have not been audited or formally verified.
+
+Randomness comes only from the operating system (`getrandom` on Linux, `getentropy` on macOS and BSD); there is no fallback to a non-cryptographic generator. To report a problem, see [SECURITY.md](SECURITY.md).
+
+---
+
+## Engineering practices
+
+- **CI** on every pull request: gcc and clang on Ubuntu, clang on macOS, all with `-Werror`; a separate ASan + UBSan job; contract compilation, strict TypeScript type checking, and tests.
+- **Supply chain:** third-party GitHub Actions are pinned to commit SHAs, the workflow token is read-only, and Dependabot keeps actions and npm packages current.
+- **Portable builds:** no host-specific flags by default; per-target warnings via a CMake interface library.
+- **No crypto dependencies:** every primitive is implemented from its FIPS document, with section references in the source.
+
+---
+
+## Roadmap
+
+- [ ] FIPS 205 known-answer vectors for SLH-DSA
+- [ ] libFuzzer harnesses for decapsulation, signature verification, and Base58 decoding
+- [ ] Binary-level constant-time verification in CI
+- [ ] Benchmarks (cycles per operation) compared against liboqs
+- [ ] Migrate TicketOffice to ERC-721 with OpenZeppelin `Ownable2Step`, `Pausable`, and `ReentrancyGuard`
+- [ ] Enforce event dates and add an optional resale price cap
+- [ ] Foundry fuzz and invariant tests, Slither static analysis, and coverage gating
+- [ ] Verified Sepolia deployment and a web front end
+
+---
+
+## License
+
+[MIT](LICENSE)
