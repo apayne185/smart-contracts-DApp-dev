@@ -89,5 +89,9 @@ jobs:
       - name: Compile contracts
         run: npm run build
 
+      # Runs after build because tsc needs the generated contract typings.
+      - name: Type check
+        run: npm run typecheck
+
       - name: Run test suite
         run: npm test

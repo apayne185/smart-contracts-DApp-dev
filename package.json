@@ -11,7 +11,8 @@
     "test": "hardhat test",
     "node": "hardhat node",
     "deploy:vending": "hardhat run scripts/deploy-vending.ts --network localhost",
-    "deploy:ticket": "hardhat run scripts/deploy-ticket.ts  --network localhost"
+    "deploy:ticket": "hardhat run scripts/deploy-ticket.ts  --network localhost",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
