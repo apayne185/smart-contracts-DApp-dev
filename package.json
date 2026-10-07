@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^4.0.0",
     "@types/mocha": "^10.0.10",
     "chai": "^5.1.2",
     "hardhat": "^3.18.1"
