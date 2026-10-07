@@ -99,7 +99,7 @@ static Bytes_N prf_msg(const Bytes_N& sk_prf, const Bytes_N& opt_rand,
     std::vector<uint8_t> buf(N + N + msg_len);
     memcpy(buf.data(),       sk_prf.data(), N);
     memcpy(buf.data() + N,   opt_rand.data(), N);
-    memcpy(buf.data() + 2*N, msg, msg_len);
+    if (msg_len) memcpy(buf.data() + 2*N, msg, msg_len);  // msg may be null when empty
     Bytes_N out;
     sha3::shake256_into(buf.data(), buf.size(), out.data(), N);
     return out;
@@ -115,7 +115,7 @@ static std::vector<uint8_t> h_msg(const Bytes_N& R, const Bytes_N& pk_seed,
     memcpy(buf.data(),       R.data(), N);
     memcpy(buf.data() + N,   pk_seed.data(), N);
     memcpy(buf.data() + 2*N, pk_root.data(), N);
-    memcpy(buf.data() + 3*N, msg, msg_len);
+    if (msg_len) memcpy(buf.data() + 3*N, msg, msg_len);  // msg may be null when empty
     std::vector<uint8_t> out(M);
     sha3::shake256_into(buf.data(), buf.size(), out.data(), M);
     return out;
