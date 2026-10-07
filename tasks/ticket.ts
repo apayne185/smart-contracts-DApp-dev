@@ -1,5 +1,6 @@
-import { task } from "hardhat/config";
+import { emptyTask, task } from "hardhat/config";
 import { ArgumentType } from "hardhat/types/arguments";
+import type { TaskDefinition } from "hardhat/types/tasks";
 import fs from "fs";
 
 function loadAddress(): string {
@@ -15,8 +16,15 @@ function loadAbi() {
   return JSON.parse(fs.readFileSync(artifactPath, "utf8")).abi;
 }
 
+// Hardhat 3 registers tasks through the config `tasks` array, not via
+// import side effects. The empty parent task makes `npx hardhat ticket` list
+// its subtasks.
+export const ticketTasks: TaskDefinition[] = [
+  emptyTask("ticket", "Interact with a deployed TicketOffice").build(),
+];
+
 // ── ticket:list ───────────────────────────────────────────────────────────────
-task(["ticket", "list"], "List all events")
+ticketTasks.push(task(["ticket", "list"], "List all events")
   .setInlineAction(async (_args, hre) => {
     const { ethers } = await hre.network.getOrCreate();
     const office = new ethers.Contract(loadAddress(), loadAbi(), (await ethers.getSigners())[0]);
@@ -33,10 +41,10 @@ task(["ticket", "list"], "List all events")
         `${String(supply).padEnd(8)}${String(sold).padEnd(6)}${String(active).padEnd(8)}${dateStr}`
       );
     }
-  });
+  }).build());
 
 // ── ticket:buy ────────────────────────────────────────────────────────────────
-task(["ticket", "buy"], "Buy one ticket for an event at face price")
+ticketTasks.push(task(["ticket", "buy"], "Buy one ticket for an event at face price")
   .addOption({ name: "eventId", description: "Event ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ eventId }, hre) => {
     const { ethers } = await hre.network.getOrCreate();
@@ -49,11 +57,11 @@ task(["ticket", "buy"], "Buy one ticket for an event at face price")
       .map((l: any) => { try { return office.interface.parseLog(l); } catch { return null; } })
       .find((e: any) => e?.name === "TicketPurchased");
     console.log(`Ticket #${parsed?.args.ticketId} issued. Tx: ${rc.hash}`);
-  });
+  }).build());
 
 // ── ticket:my-tickets ─────────────────────────────────────────────────────────
-task(["ticket", "my-tickets"], "List tickets owned by an address")
-  .addOption({ name: "address", description: "Address to check (defaults to signer[1])", type: ArgumentType.STRING_WITHOUT_DEFAULT })
+ticketTasks.push(task(["ticket", "my-tickets"], "List tickets owned by an address")
+  .addOption({ name: "address", description: "Address to check (defaults to signer[1])", type: ArgumentType.STRING_WITHOUT_DEFAULT, defaultValue: undefined })
   .setInlineAction(async ({ address }, hre) => {
     const { ethers } = await hre.network.getOrCreate();
     const signers = await ethers.getSigners();
@@ -69,10 +77,10 @@ task(["ticket", "my-tickets"], "List tickets owned by an address")
       const tag = listed ? ` [listed @ ${ethers.formatEther(listPrice)} ETH]` : "";
       console.log(`  Ticket #${tid} — ${name}${tag}`);
     }
-  });
+  }).build());
 
 // ── ticket:transfer ───────────────────────────────────────────────────────────
-task(["ticket", "transfer"], "Transfer a ticket to another address")
+ticketTasks.push(task(["ticket", "transfer"], "Transfer a ticket to another address")
   .addOption({ name: "ticketId", description: "Ticket ID",           type: ArgumentType.BIGINT, defaultValue: 1n })
   .addOption({ name: "to",       description: "Recipient address",   type: ArgumentType.STRING, defaultValue: "" })
   .setInlineAction(async ({ ticketId, to }, hre) => {
@@ -81,10 +89,10 @@ task(["ticket", "transfer"], "Transfer a ticket to another address")
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.transferTicket(ticketId, to)).wait();
     console.log(`Ticket #${ticketId} transferred to ${to}`);
-  });
+  }).build());
 
 // ── ticket:list-resale ────────────────────────────────────────────────────────
-task(["ticket", "list-resale"], "List a ticket for resale")
+ticketTasks.push(task(["ticket", "list-resale"], "List a ticket for resale")
   .addOption({ name: "ticketId", description: "Ticket ID",       type: ArgumentType.BIGINT, defaultValue: 1n })
   .addOption({ name: "price",    description: "Resale price ETH", type: ArgumentType.STRING, defaultValue: "0.03" })
   .setInlineAction(async ({ ticketId, price }, hre) => {
@@ -93,10 +101,10 @@ task(["ticket", "list-resale"], "List a ticket for resale")
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.listForResale(ticketId, ethers.parseEther(price))).wait();
     console.log(`Ticket #${ticketId} listed at ${price} ETH`);
-  });
+  }).build());
 
 // ── ticket:cancel-listing ─────────────────────────────────────────────────────
-task(["ticket", "cancel-listing"], "Cancel a resale listing")
+ticketTasks.push(task(["ticket", "cancel-listing"], "Cancel a resale listing")
   .addOption({ name: "ticketId", description: "Ticket ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ ticketId }, hre) => {
     const { ethers } = await hre.network.getOrCreate();
@@ -104,10 +112,10 @@ task(["ticket", "cancel-listing"], "Cancel a resale listing")
     const office = new ethers.Contract(loadAddress(), loadAbi(), user);
     await (await office.cancelListing(ticketId)).wait();
     console.log(`Listing for ticket #${ticketId} cancelled`);
-  });
+  }).build());
 
 // ── ticket:buy-resale ─────────────────────────────────────────────────────────
-task(["ticket", "buy-resale"], "Buy a ticket listed on the secondary market")
+ticketTasks.push(task(["ticket", "buy-resale"], "Buy a ticket listed on the secondary market")
   .addOption({ name: "ticketId", description: "Ticket ID", type: ArgumentType.BIGINT, defaultValue: 1n })
   .setInlineAction(async ({ ticketId }, hre) => {
     const { ethers } = await hre.network.getOrCreate();
@@ -116,10 +124,10 @@ task(["ticket", "buy-resale"], "Buy a ticket listed on the secondary market")
     const [price] = await office.getListing(ticketId);
     await (await office.buyResale(ticketId, { value: price })).wait();
     console.log(`Bought ticket #${ticketId} for ${ethers.formatEther(price)} ETH`);
-  });
+  }).build());
 
 // ── ticket:create ─────────────────────────────────────────────────────────────
-task(["ticket", "create"], "Admin: create a new event")
+ticketTasks.push(task(["ticket", "create"], "Admin: create a new event")
   .addOption({ name: "name",   description: "Event name",          type: ArgumentType.STRING, defaultValue: "" })
   .addOption({ name: "price",  description: "Ticket price in ETH", type: ArgumentType.STRING, defaultValue: "0.01" })
   .addOption({ name: "supply", description: "Total ticket supply", type: ArgumentType.BIGINT, defaultValue: 100n })
@@ -129,10 +137,10 @@ task(["ticket", "create"], "Admin: create a new event")
     const office = new ethers.Contract(loadAddress(), loadAbi(), (await ethers.getSigners())[0]);
     await (await office.createEvent(name, ethers.parseEther(price), supply, date)).wait();
     console.log(`Created event "${name}"`);
-  });
+  }).build());
 
 // ── ticket:withdraw ───────────────────────────────────────────────────────────
-task(["ticket", "withdraw"], "Admin: withdraw collected ETH")
+ticketTasks.push(task(["ticket", "withdraw"], "Admin: withdraw collected ETH")
   .setInlineAction(async (_args, hre) => {
     const { ethers } = await hre.network.getOrCreate();
     const admin = (await ethers.getSigners())[0];
@@ -140,4 +148,4 @@ task(["ticket", "withdraw"], "Admin: withdraw collected ETH")
     const bal = await ethers.provider.getBalance(loadAddress());
     await (await office.withdraw()).wait();
     console.log(`Withdrew ${ethers.formatEther(bal)} ETH to ${admin.address}`);
-  });
+  }).build());

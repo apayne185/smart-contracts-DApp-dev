@@ -1,10 +1,11 @@
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import { configVariable, defineConfig } from "hardhat/config";
-import "./tasks/vending.js";
-import "./tasks/ticket.js";
+import { ticketTasks } from "./tasks/ticket.js";
+import { vendingTasks } from "./tasks/vending.js";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
+  tasks:   [...vendingTasks, ...ticketTasks],
   solidity: {
     profiles: {
       default: {
