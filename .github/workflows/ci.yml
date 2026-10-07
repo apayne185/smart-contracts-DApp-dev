@@ -2,40 +2,73 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same branch or PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   # ── C++ cryptographic engines ───────────────────────────────────────────────
   cpp:
-    name: C++ build & smoke tests
-    runs-on: ubuntu-latest
+    name: C++ ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, compiler: gcc,   cxx: g++ }
+          - { os: ubuntu-latest, compiler: clang, cxx: clang++ }
+          - { os: macos-latest,  compiler: clang, cxx: clang++ }
+    env:
+      CXX: ${{ matrix.cxx }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install build tools
-        run: sudo apt-get install -y g++ cmake
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCRYPTO_WERROR=ON
 
-      - name: Configure (Release)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
 
-      - name: Build all targets
-        run: cmake --build build -j$(nproc)
-
-      - name: Known-answer tests (SHA-256 FIPS 180-4 + SHA-3 FIPS 202 + SPHINCS+ round-trip)
+      - name: Unit and known-answer tests
         run: ctest --test-dir build --output-on-failure
 
-      - name: pow — find SHA256 prefix 'cafe' (< 1s)
-        # Single short prefix keeps CI fast; full suite (cafe/faded/decade) runs locally.
-        run: ./build/pow cafe
+      - name: Smoke-run demo binaries
+        run: |
+          ./build/pow cafe
+          ./build/collision
+          ./build/tx_builder
 
-      - name: collision — birthday attack on djb2 hash
-        run: ./build/collision
+  sanitizers:
+    name: C++ ASan + UBSan
+    runs-on: ubuntu-latest
+    env:
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
 
-      - name: tx_builder — P2PKH transaction serialisation demo
-        run: ./build/tx_builder
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # RelWithDebInfo keeps the SPHINCS+ suite fast enough under sanitizers.
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCRYPTO_WERROR=ON -DCRYPTO_SANITIZE=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Tests under sanitizers
+        run: ctest --test-dir build --output-on-failure --timeout 900
 
   # ── Solidity smart contracts ────────────────────────────────────────────────
   solidity:
@@ -43,13 +76,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
-          cache: "npm"
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
