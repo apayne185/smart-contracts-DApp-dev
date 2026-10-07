@@ -82,12 +82,12 @@ static void test_kat_sign() {
                                     : std::vector<uint8_t>(sk.pk_seed.begin(), sk.pk_seed.end());
         auto msg = from_hex(tc.message);
 
-        auto sig = sphincs::sign(msg.data(), msg.size(), sk, opt_rand.data());
+        auto sig = sphincs::sign_internal(msg.data(), msg.size(), sk, opt_rand.data());
         auto digest = sha3::sha3_256(sig.data(), sig.size());
         std::string label = "KAT sign tgId=" + std::to_string(tc.tg_id) +
                             " tcId=" + std::to_string(tc.tc_id);
         check(label + " signature matches", sha3::to_hex(digest.data(), digest.size()) == tc.sig_sha3_256);
-        check(label + " verifies", sphincs::verify(msg.data(), msg.size(), sig, pk));
+        check(label + " verifies", sphincs::verify_internal(msg.data(), msg.size(), sig, pk));
     }
 }
 
@@ -106,7 +106,7 @@ static void test_roundtrip(const std::string& label,
                             const std::array<uint8_t, sphincs::N>& opt_rand)
 {
     auto kp  = sphincs::keygen(seed);
-    auto sig = sphincs::sign(msg.data(), msg.size(), kp.sk, opt_rand.data());
+    auto sig = sphincs::sign(msg.data(), msg.size(), kp.sk, {}, opt_rand.data());
     check(label + " sig_len",  sig.size() == sphincs::SIG_BYTES);
     check(label + " verify",   sphincs::verify(msg.data(), msg.size(), sig, kp.pk));
 }
@@ -137,7 +137,7 @@ int main() {
     std::cout << "\nSigning 5-byte message...\n";
     std::vector<uint8_t> msg5 = {'h','e','l','l','o'};
     std::array<uint8_t, sphincs::N> zero_rand{};
-    auto sig5 = sphincs::sign(msg5.data(), msg5.size(), kp.sk, zero_rand.data());
+    auto sig5 = sphincs::sign(msg5.data(), msg5.size(), kp.sk, {}, zero_rand.data());
 
     check("sign: sig length",           sig5.size() == sphincs::SIG_BYTES);
     check("verify: 5-byte msg valid",   sphincs::verify(msg5.data(), msg5.size(), sig5, kp.pk));
@@ -168,12 +168,12 @@ int main() {
 
     // ── Determinism ───────────────────────────────────────────────────────────
     {
-        auto sig_a = sphincs::sign(msg5.data(), msg5.size(), kp.sk, zero_rand.data());
-        auto sig_b = sphincs::sign(msg5.data(), msg5.size(), kp.sk, zero_rand.data());
+        auto sig_a = sphincs::sign(msg5.data(), msg5.size(), kp.sk, {}, zero_rand.data());
+        auto sig_b = sphincs::sign(msg5.data(), msg5.size(), kp.sk, {}, zero_rand.data());
         check("sign: deterministic with same opt_rand", sig_a == sig_b);
 
         std::array<uint8_t, sphincs::N> r2{}; r2[0] = 0xFF;
-        auto sig_c = sphincs::sign(msg5.data(), msg5.size(), kp.sk, r2.data());
+        auto sig_c = sphincs::sign(msg5.data(), msg5.size(), kp.sk, {}, r2.data());
         check("sign: different opt_rand → different sig", sig_a != sig_c);
         check("verify: alt-rand sig valid",
               sphincs::verify(msg5.data(), msg5.size(), sig_c, kp.pk));
@@ -182,7 +182,7 @@ int main() {
     // ── Empty message ─────────────────────────────────────────────────────────
     {
         std::vector<uint8_t> empty;
-        auto sig_e = sphincs::sign(empty.data(), 0, kp.sk, zero_rand.data());
+        auto sig_e = sphincs::sign(empty.data(), 0, kp.sk, {}, zero_rand.data());
         check("verify: empty msg round-trip",
               sphincs::verify(empty.data(), 0, sig_e, kp.pk));
     }

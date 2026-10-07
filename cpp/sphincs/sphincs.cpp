@@ -586,8 +586,8 @@ SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed) {
     return kp;
 }
 
-Signature sign(const uint8_t* msg, size_t msg_len,
-               const SecretKey& sk, const uint8_t* opt_rand_in)
+Signature sign_internal(const uint8_t* msg, size_t msg_len,
+                        const SecretKey& sk, const uint8_t* opt_rand_in)
 {
     Bytes_N opt_rand{};
     if (opt_rand_in) {
@@ -659,8 +659,8 @@ Signature sign(const uint8_t* msg, size_t msg_len,
     return sig;
 }
 
-bool verify(const uint8_t* msg, size_t msg_len,
-            const Signature& sig, const PublicKey& pk)
+bool verify_internal(const uint8_t* msg, size_t msg_len,
+                     const Signature& sig, const PublicKey& pk)
 {
     if (sig.size() != SIG_BYTES) return false;
 
@@ -727,16 +727,50 @@ bool verify(const uint8_t* msg, size_t msg_len,
     return node == pk.pk_root;
 }
 
-Signature sign(const std::vector<uint8_t>& msg, const SecretKey& sk,
-               const uint8_t* opt_rand)
+// ── Pure external interface (FIPS 205 §10.2) ─────────────────────────────────
+//
+// M' = toByte(0, 1) || toByte(|ctx|, 1) || ctx || M. The leading zero byte
+// separates pure signing from the pre-hash variant (domain separator 1).
+
+static std::vector<uint8_t> encode_pure(const uint8_t* msg, size_t msg_len,
+                                        const std::vector<uint8_t>& ctx)
 {
-    return sign(msg.data(), msg.size(), sk, opt_rand);
+    if (msg_len > SIZE_MAX - 2 - MAX_CTX_BYTES) throw std::length_error("message too large");
+    std::vector<uint8_t> m_prime(2 + ctx.size() + msg_len);
+    m_prime[0] = 0;
+    m_prime[1] = static_cast<uint8_t>(ctx.size());
+    if (!ctx.empty()) memcpy(m_prime.data() + 2, ctx.data(), ctx.size());
+    if (msg_len)      memcpy(m_prime.data() + 2 + ctx.size(), msg, msg_len);
+    return m_prime;
+}
+
+Signature sign(const uint8_t* msg, size_t msg_len, const SecretKey& sk,
+               const std::vector<uint8_t>& ctx, const uint8_t* opt_rand)
+{
+    if (ctx.size() > MAX_CTX_BYTES)
+        throw std::invalid_argument("context string longer than 255 bytes");
+    auto m_prime = encode_pure(msg, msg_len, ctx);
+    return sign_internal(m_prime.data(), m_prime.size(), sk, opt_rand);
+}
+
+bool verify(const uint8_t* msg, size_t msg_len, const Signature& sig,
+            const PublicKey& pk, const std::vector<uint8_t>& ctx)
+{
+    if (ctx.size() > MAX_CTX_BYTES) return false;
+    auto m_prime = encode_pure(msg, msg_len, ctx);
+    return verify_internal(m_prime.data(), m_prime.size(), sig, pk);
+}
+
+Signature sign(const std::vector<uint8_t>& msg, const SecretKey& sk,
+               const std::vector<uint8_t>& ctx, const uint8_t* opt_rand)
+{
+    return sign(msg.data(), msg.size(), sk, ctx, opt_rand);
 }
 
 bool verify(const std::vector<uint8_t>& msg, const Signature& sig,
-            const PublicKey& pk)
+            const PublicKey& pk, const std::vector<uint8_t>& ctx)
 {
-    return verify(msg.data(), msg.size(), sig, pk);
+    return verify(msg.data(), msg.size(), sig, pk, ctx);
 }
 
 } // namespace sphincs

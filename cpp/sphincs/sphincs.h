@@ -7,8 +7,8 @@
 // crypto library is used.  Signing is stateless and randomised.
 //
 // Public API:  SphincsKey  keygen(seed)
-//              Signature   sign(msg, sk, randomise=true)
-//              bool        verify(msg, sig, pk)
+//              Signature   sign(msg, sk, ctx = {}, opt_rand = nullptr)
+//              bool        verify(msg, sig, pk, ctx = {})
 #pragma once
 #include <array>
 #include <cstddef>
@@ -77,25 +77,43 @@ using Signature = std::vector<uint8_t>;
 // fill it with crypto::randombytes (common/randombytes.h) before calling.
 SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed);
 
-// Sign msg.  If opt_rand is non-null it must point to N bytes used as the
-// per-signature randomiser; pass PK.seed for the FIPS 205 deterministic
-// variant.
-// Otherwise a random N-byte value is drawn from the OS CSPRNG
-// (crypto::randombytes).
-Signature sign(const uint8_t* msg, size_t msg_len,
-               const SecretKey& sk,
+// Maximum context string length (FIPS 205 §10.2).
+static constexpr size_t MAX_CTX_BYTES = 255;
+
+// ── Pure signing interface (FIPS 205 Algorithms 22 and 24) ───────────────────
+//
+// This is the interface to use. ctx is an optional application-chosen
+// context string (at most 255 bytes) that binds a signature to its purpose;
+// a signature made under one context does not verify under another.
+//
+// If opt_rand is non-null it must point to N bytes used as the per-signature
+// randomiser; pass PK.seed for the FIPS 205 deterministic variant. Otherwise
+// a fresh randomiser is drawn from the OS CSPRNG (crypto::randombytes).
+//
+// sign throws std::invalid_argument if ctx exceeds MAX_CTX_BYTES; verify
+// returns false in that case.
+Signature sign(const uint8_t* msg, size_t msg_len, const SecretKey& sk,
+               const std::vector<uint8_t>& ctx = {},
                const uint8_t* opt_rand = nullptr);
 
-// Verify a signature against a message and public key.
-// Returns true iff the signature is valid.
-bool verify(const uint8_t* msg, size_t msg_len,
-            const Signature& sig,
-            const PublicKey& pk);
+bool verify(const uint8_t* msg, size_t msg_len, const Signature& sig,
+            const PublicKey& pk, const std::vector<uint8_t>& ctx = {});
 
 // Convenience overloads for std::vector messages
 Signature sign(const std::vector<uint8_t>& msg, const SecretKey& sk,
+               const std::vector<uint8_t>& ctx = {},
                const uint8_t* opt_rand = nullptr);
 bool verify(const std::vector<uint8_t>& msg, const Signature& sig,
-            const PublicKey& pk);
+            const PublicKey& pk, const std::vector<uint8_t>& ctx = {});
+
+// ── Internal interface (FIPS 205 Algorithms 19 and 20) ───────────────────────
+//
+// Signs msg directly with no domain separation. Exposed for known-answer
+// testing; applications should use sign / verify above.
+Signature sign_internal(const uint8_t* msg, size_t msg_len,
+                        const SecretKey& sk, const uint8_t* opt_rand = nullptr);
+
+bool verify_internal(const uint8_t* msg, size_t msg_len,
+                     const Signature& sig, const PublicKey& pk);
 
 } // namespace sphincs
