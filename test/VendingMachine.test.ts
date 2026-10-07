@@ -1,10 +1,13 @@
 import { expect } from "chai";
 import { network } from "hardhat";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { VendingMachine } from "../types/ethers-contracts/index.js";
 
 const { ethers } = await network.getOrCreate();
 
 describe("VendingMachine", function () {
-  let vm, alice, bob;
+  let vm: VendingMachine;
+  let alice: HardhatEthersSigner, bob: HardhatEthersSigner;
   const COLA  = { name: "Cola",  price: ethers.parseEther("0.01"),stock: 5 };
   const CHIPS = { name: "Chips",price: ethers.parseEther("0.005"), stock: 3 };
   const CHOCO = { name: "Chocolate", price: ethers.parseEther("0.008"), stock: 2 };
@@ -93,7 +96,7 @@ describe("VendingMachine", function () {
     const balBefore = await ethers.provider.getBalance(alice.address);
 
     const tx = await vm.connect(alice).purchase(1, qty, { value: overpay });
-    const rcpt = await tx.wait();
+    const rcpt = (await tx.wait())!; // null only for unmined txs; automine mines immediately
     const gas = rcpt.gasUsed * rcpt.gasPrice;
 
     const balAfter = await ethers.provider.getBalance(alice.address);
