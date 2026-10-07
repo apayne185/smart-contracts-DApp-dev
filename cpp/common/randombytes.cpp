@@ -5,7 +5,9 @@
 
 #if defined(__linux__)
 #include <sys/random.h>
-#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif defined(__APPLE__)
+#include <sys/random.h>
+#elif defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <unistd.h>
 #else
 #error "randombytes: unsupported platform (need getrandom or getentropy)"
