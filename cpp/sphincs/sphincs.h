@@ -74,12 +74,13 @@ using Signature = std::vector<uint8_t>;
 
 // Generate a key pair from a 3n-byte seed (sk_seed || sk_prf || pk_seed).
 // For deterministic generation pass a fixed 48-byte value; for random keys
-// fill it with a CSPRNG before calling.
+// fill it with crypto::randombytes (common/randombytes.h) before calling.
 SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed);
 
 // Sign msg.  If opt_rand is non-null it must point to N bytes used as the
 // per-signature randomiser (set to all-zeros for deterministic signing).
-// Otherwise a random N-byte value is generated via /dev/urandom.
+// Otherwise a random N-byte value is drawn from the OS CSPRNG
+// (crypto::randombytes).
 Signature sign(const uint8_t* msg, size_t msg_len,
                const SecretKey& sk,
                const uint8_t* opt_rand = nullptr);

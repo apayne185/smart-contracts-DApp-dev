@@ -40,6 +40,10 @@ endfunction()
 
 # ── Libraries ────────────────────────────────────────────────────────────────
 
+# OS CSPRNG wrapper (getrandom / getentropy)
+add_library(randombytes STATIC cpp/common/randombytes.cpp)
+crypto_target(randombytes)
+
 # SHA-256 (FIPS 180-4), shared by pow and tx_builder
 add_library(sha256 STATIC cpp/sha256/sha256.cpp)
 crypto_target(sha256)
@@ -51,7 +55,7 @@ crypto_target(sha3)
 # SPHINCS+ / SLH-DSA-SHAKE-128s (FIPS 205)
 add_library(sphincs STATIC cpp/sphincs/sphincs.cpp)
 crypto_target(sphincs)
-target_link_libraries(sphincs PRIVATE sha3)
+target_link_libraries(sphincs PRIVATE sha3 randombytes)
 
 # ML-KEM-512 / CRYSTALS-Kyber (FIPS 203)
 add_library(mlkem STATIC cpp/mlkem/mlkem.cpp)
@@ -82,6 +86,11 @@ foreach(t sha256 sha3 sphincs mlkem)
   target_link_libraries(${t}_test PRIVATE ${t} sha3)
 endforeach()
 
+add_executable(randombytes_test cpp/common/randombytes_test.cpp)
+crypto_target(randombytes_test)
+target_link_libraries(randombytes_test PRIVATE randombytes)
+
+add_test(NAME randombytes_sanity COMMAND randombytes_test)
 add_test(NAME sha256_vectors    COMMAND sha256_test)
 add_test(NAME sha3_vectors      COMMAND sha3_test)
 add_test(NAME sphincs_roundtrip COMMAND sphincs_test)

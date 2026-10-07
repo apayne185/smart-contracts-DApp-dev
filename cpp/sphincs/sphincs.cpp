@@ -11,9 +11,9 @@
 //   SLH-DSA keygen / sign / verify (§9–10)
 #include "sphincs.h"
 #include "../sha3/sha3.h"
+#include "../common/randombytes.h"
 #include <cassert>
 #include <cstring>
-#include <fstream>
 #include <stdexcept>
 
 namespace sphincs {
@@ -555,16 +555,6 @@ static DigestParts parse_digest(const std::vector<uint8_t>& md) {
     return dp;
 }
 
-// ── Random bytes ──────────────────────────────────────────────────────────────
-
-static void random_bytes(uint8_t* out, size_t n) {
-    std::ifstream rng("/dev/urandom", std::ios::binary);
-    if (!rng) throw std::runtime_error("Cannot open /dev/urandom");
-    rng.read(reinterpret_cast<char*>(out), static_cast<std::streamsize>(n));
-    if (static_cast<size_t>(rng.gcount()) != n)
-        throw std::runtime_error("Short read from /dev/urandom");
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 SphincsKey keygen(const std::array<uint8_t, 3 * N>& seed) {
@@ -590,7 +580,7 @@ Signature sign(const uint8_t* msg, size_t msg_len,
     if (opt_rand_in) {
         memcpy(opt_rand.data(), opt_rand_in, N);
     } else {
-        random_bytes(opt_rand.data(), N);
+        crypto::randombytes(opt_rand.data(), N);
     }
 
     // 1. Randomise the message
